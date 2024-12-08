@@ -7,6 +7,5 @@ edition = "2021"
 anyhow = "1.0.94"
 clap = { version = "4.5.23", features = ["derive"] }
 html2text = "0.13.5"
-reqwest = { version = "0.12.9", features = ["blocking", "multipart"] }
+reqwest = { version = "0.12.9", features = ["blocking"] }
 scraper = "0.21.0"
-urlencoding = "2.1.3"

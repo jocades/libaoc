@@ -6,10 +6,7 @@ use std::{
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use reqwest::header::HeaderMap;
-use reqwest::{
-    blocking::{multipart, Client},
-    redirect::Policy,
-};
+use reqwest::{blocking::Client, redirect::Policy};
 use scraper::{Html, Selector};
 
 #[derive(Parser)]
@@ -33,11 +30,11 @@ enum Command {
     Submit {
         answer: String,
         #[arg(long, short, value_parser = clap::value_parser!(u32).range(2015..=2024))]
-        year: u32,
+        year: Option<u32>,
         #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=24))]
-        day: u32,
+        day: Option<u32>,
         #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=2))]
-        part: u32,
+        part: Option<u32>,
     },
 }
 
@@ -51,8 +48,8 @@ fn aoc_url(year: u32, day: u32) -> String {
 struct Puzzle {
     id: (u32, u32),
     q1: String,
-    a1: String,
     q2: String,
+    a1: String,
     a2: String,
 }
 
@@ -61,7 +58,8 @@ fn id_to_path((y, d): (u32, u32)) -> PathBuf {
 }
 
 impl Puzzle {
-    fn read(path: &Path, year: u32, day: u32) -> Option<Puzzle> {
+    fn read(path: impl AsRef<Path>, year: u32, day: u32) -> Option<Puzzle> {
+        let path = path.as_ref();
         path.exists().then(|| Puzzle {
             id: (year, day),
             q1: fs::read_to_string(path.join("question1")).unwrap_or_default(),
@@ -83,7 +81,7 @@ impl Puzzle {
 
     fn scrape(client: &Client, year: u32, day: u32) -> Result<Puzzle> {
         let url = aoc_url(year, day);
-        let html = client.get(&url).send().context("get view")?.text()?;
+        let html = client.get(&url).send().context("get puzzle")?.text()?;
         let doc = Html::parse_document(&html);
 
         let selector = Selector::parse("article.day-desc").unwrap();
@@ -114,13 +112,9 @@ impl Puzzle {
 
 fn scrape_input(client: &Client, year: u32, day: u32) -> Result<String> {
     let url = format!("{}/input", aoc_url(year, day));
-    let data = client.get(&url).send()?.text()?;
+    let data = client.get(&url).send().context("get input")?.text()?;
     Ok(data)
 }
-
-// struct AdventClient {
-//
-// }
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -133,7 +127,7 @@ fn main() -> Result<()> {
 
     let headers = HeaderMap::from_iter([("cookie".parse()?, auth.parse()?)]);
     let client = Client::builder()
-        .user_agent("")
+        .user_agent("aocli.rs")
         .default_headers(headers)
         .redirect(Policy::none())
         .build()?;
@@ -146,7 +140,14 @@ fn main() -> Result<()> {
             let puzzle = match Puzzle::read(&puzzle_path, year, day) {
                 Some(puzzle) => {
                     println!("input from cache");
-                    puzzle
+                    if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
+                        println!("next part");
+                        let puzzle = Puzzle::scrape(&client, year, day)?;
+                        puzzle.write(&puzzle_path)?;
+                        puzzle
+                    } else {
+                        puzzle
+                    }
                 }
                 None => {
                     let puzzle = Puzzle::scrape(&client, year, day)?;
@@ -179,18 +180,74 @@ fn main() -> Result<()> {
             day,
             part,
         } => {
+            let (year, day) = match (year, day) {
+                (Some(y), Some(d)) => (y, d),
+                _ => {
+                    let mut day = 0;
+                    let mut year = 0;
+                    for parent in env::current_dir()?.ancestors() {
+                        let mut chars = parent.file_name().unwrap().to_str().unwrap().chars();
+                        let mut s = String::new();
+                        while let Some(c) = chars.next() {
+                            if c.is_ascii_digit() {
+                                s.push(c);
+                                while let Some(c) = chars.next() {
+                                    if !c.is_ascii_digit() {
+                                        break;
+                                    }
+                                    s.push(c);
+                                }
+                            }
+                        }
+                        if !s.is_empty() {
+                            if day == 0 {
+                                day = s.parse().unwrap();
+                            } else {
+                                year = s.parse().unwrap();
+                            }
+                        }
+                        if year > 0 {
+                            break;
+                        }
+                    }
+                    (year, day)
+                }
+            };
+            assert!(day > 0 && year > 0);
             let aoc = aoc_url(year, day);
             let url = format!("{aoc}/answer");
             println!("day={day} year={year} answer={answer} url={url}");
 
-            let resp = client
+            return Ok(());
+
+            let part = part.unwrap_or(1);
+
+            let html = client
                 .post(&url)
                 .header("content-type", "application/x-www-form-urlencoded")
                 .body(format!("level={part}&answer={answer}"))
-                .send()?;
-            println!("{resp:?}");
-            let text = resp.text()?;
-            println!("{text}");
+                .send()?
+                .text()?;
+
+            if html.contains("That's the right answer") {
+                println!("Correct!");
+                if part == 1 {
+                    let puzzle = Puzzle::scrape(&client, year, day)?;
+                    let puzzle_path = cache.join(id_to_path((year, day)));
+                    puzzle.write(&puzzle_path)?;
+                }
+                fs::write(
+                    cache.join(id_to_path((year, day)).join(format!("answer{part}"))),
+                    &answer,
+                )?;
+            } else if html.contains("That's not the right answer") {
+                println!("Incorrect!");
+            } else if html.contains("You gave an answer too recently") {
+                println!("Wait!");
+            } else {
+                eprintln!("error: unknown response");
+                std::process::exit(1);
+            }
         }
     }
 

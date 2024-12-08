@@ -1,13 +1,23 @@
 input = open("input").read().splitlines()
 count = 0
+numbers = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 for line in input:
-    n = []
-    for c in line:
-        if len(n) == 2:
-            break
+    out = []
+    i = 0
+    s = ""
+    while i < len(line):
+        c = line[i]
         if c.isdigit():
-            n.append(c)
-    count += int("".join(n))
+            if s:
+                for j, n in enumerate(numbers):
+                    if n in s:
+                        out.append(str(j + 1))
+                s = ""
+            out.append(c)
+        else:
+            s += c
+        i += 1
+    count += int(out[0] + out[-1])
 
 
 print(count)
