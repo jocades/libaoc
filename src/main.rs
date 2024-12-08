@@ -1,6 +1,11 @@
-use std::{env, fs, path::Path};
+use std::{
+    env,
+    fs::{self, File},
+    io::{self, Write},
+    path::Path,
+};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use reqwest::header::HeaderMap;
 use scraper::{Html, Selector};
@@ -24,6 +29,10 @@ enum Command {
 
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
+fn aoc_url(year: u32, day: u32) -> String {
+    format!("https://adventofcode.com/{year}/day/{day}")
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
     let auth = env::var("AOC_AUTH_COOKIE")
@@ -34,7 +43,6 @@ fn main() -> Result<()> {
         });
 
     let headers = HeaderMap::from_iter([("cookie".parse()?, auth.parse()?)]);
-
     let client = reqwest::blocking::Client::builder()
         .user_agent(USER_AGENT)
         .default_headers(headers)
@@ -47,20 +55,25 @@ fn main() -> Result<()> {
                 .join(day.to_string());
 
             if !dir.exists() {
-                let url = format!("https://adventofcode.com/{year}/day/{day}");
-                let html = client.get(&url).send().unwrap().text().unwrap();
+                let mut url = aoc_url(year, day);
+                let html = client.get(&url).send().context("get view")?.text()?;
                 let doc = Html::parse_document(&html);
                 let selector = Selector::parse("article.day-desc").unwrap();
                 fs::create_dir_all(&dir)?;
+                let mut view = File::create(dir.join("view.txt"))?;
                 for (i, article) in doc.select(&selector).enumerate() {
                     if i > 1 {
                         eprintln!("found more than 2 articles");
                         break;
                     }
                     let text = html2text::from_read(article.inner_html().as_bytes(), 80)?;
-                    let path = dir.join(format!("part{}q", i + 1));
-                    fs::write(&path, text.as_bytes())?;
+                    view.write_all(text.as_bytes())?;
                 }
+
+                url.push_str("/input");
+                let mut input = File::create(dir.join("input.txt"))?;
+                let mut html = client.get(&url).send().context("get input")?;
+                io::copy(&mut html, &mut input).context("write input")?;
             }
         }
     }
