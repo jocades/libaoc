@@ -35,7 +35,7 @@ impl Client {
         headers.insert("cookie", format!("session={token}").parse()?);
         Ok(Self {
             http: reqwest::blocking::Client::builder()
-                .user_agent("aocli.rs")
+                .user_agent("libaoc.rs")
                 .default_headers(headers)
                 .redirect(Policy::none())
                 .build()?,

@@ -17,7 +17,7 @@ struct Args {
 
 #[derive(clap::Args)]
 struct YearDay {
-    #[arg(long, short, value_parser = value_parser!(u32).range(2015..=2025))]
+    #[arg(long, short, value_parser = value_parser!(u32).range(2015..=2024))]
     year: Option<u32>,
     #[arg(long, short, value_parser = value_parser!(u32).range(1..=24))]
     day: Option<u32>,
@@ -115,7 +115,7 @@ fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
 }
 
 fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
-    ensure!((2015..=2025).contains(&year), "Invalid year: {year}");
+    ensure!((2015..=2024).contains(&year), "Invalid year: {year}");
     ensure!((1..=25).contains(&day), "Invalid day: {day}");
     Ok((year, day))
 }
