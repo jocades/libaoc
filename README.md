@@ -43,8 +43,8 @@ Correct!
 ```
 
 If the day or year is omitted, it will be derived from the current directory's
-structure. If the puzzle's part is omitted, it will smartly choose the correct
-one. Almost all commands can be shortened in this way.
+structure. If the puzzle's part is omitted, it will smartly be chosen from the
+puzzle state. Almost all commands can be shortened in this way.
 
 ```sh
 pwd
