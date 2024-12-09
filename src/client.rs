@@ -1,5 +1,3 @@
-use std::env;
-
 use anyhow::{Context, Result};
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
@@ -20,11 +18,8 @@ pub enum Submit {
 }
 
 impl Client {
-    pub fn new() -> Result<Self> {
-        let auth = env::var("AOC_AUTH_COOKIE")
-            .map(|token| format!("session={token}"))
-            .context("Must provide auth cookie")?;
-
+    pub fn new(token: &str) -> Result<Self> {
+        let auth = format!("session={token}");
         let headers = HeaderMap::from_iter([("cookie".parse()?, auth.parse()?)]);
         let http = reqwest::blocking::Client::builder()
             .user_agent("aocli.rs")
@@ -35,30 +30,31 @@ impl Client {
         Ok(Self { http })
     }
 
-    pub fn get_puzzle(&self, id: PuzzleId) -> Result<Puzzle> {
+    pub fn get_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         let html = self
             .http
-            .get(self.mkurl(&id))
+            .get(self.mkurl(id))
             .send()
             .context("get puzzle")?
             .text()?;
+
         let doc = Html::parse_document(&html);
-        let selector = Selector::parse("article.day-desc").unwrap();
-        let mut select = doc.select(&selector);
-        let q1 = select
+        let query = Selector::parse("article.day-desc").unwrap();
+        let mut questions = doc.select(&query);
+        let q1 = questions
             .next()
             .map(|el| html2text::from_read(el.inner_html().as_bytes(), 80).unwrap());
-        let q2 = select
+        let q2 = questions
             .next()
             .map(|el| html2text::from_read(el.inner_html().as_bytes(), 80).unwrap());
 
-        let selector = Selector::parse("article.day-desc + p code").unwrap();
-        let mut select = doc.select(&selector);
-        let a1 = select.next().map(|el| el.text().collect::<String>());
-        let a2 = select.next().map(|el| el.text().collect::<String>());
+        let query = Selector::parse("article.day-desc + p code").unwrap();
+        let mut answers = doc.select(&query);
+        let a1 = answers.next().map(|el| el.text().collect::<String>());
+        let a2 = answers.next().map(|el| el.text().collect::<String>());
 
         Ok(Puzzle {
-            id,
+            id: id.clone(),
             q1: q1.unwrap_or_default(),
             q2: q2.unwrap_or_default(),
             a1: a1.unwrap_or_default(),
@@ -66,17 +62,19 @@ impl Client {
         })
     }
 
-    pub fn get_input(self, id: PuzzleId) -> Result<String> {
-        let url = format!("{}/input", self.mkurl(&id));
-        let data = self.http.get(&url).send().context("get input")?.text()?;
-        Ok(data)
+    pub fn get_input(self, id: &PuzzleId) -> Result<String> {
+        Ok(self
+            .http
+            .get(format!("{}/input", self.mkurl(&id)))
+            .send()
+            .context("get input")?
+            .text()?)
     }
 
-    pub fn submit(&self, id: PuzzleId, part: u32, answer: impl AsRef<str>) -> Result<Submit> {
-        let url = format!("{}/answer", self.mkurl(&id));
+    pub fn submit(&self, id: &PuzzleId, part: u32, answer: impl AsRef<str>) -> Result<Submit> {
         let html = self
             .http
-            .post(&url)
+            .post(format!("{}/answer", self.mkurl(id)))
             .header("content-type", "application/x-www-form-urlencoded")
             .body(format!("level={part}&answer={}", answer.as_ref()))
             .send()?
@@ -89,7 +87,7 @@ impl Client {
         } else if html.contains("You gave an answer too recently") {
             Submit::Wait("Wait!".into())
         } else {
-            Submit::Error("Unkwon response".into())
+            Submit::Error("Unknown response".into())
         })
     }
 

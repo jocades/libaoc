@@ -1,55 +1,31 @@
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    process,
 };
 
 use anyhow::{ensure, Result};
-use clap::{Parser, Subcommand};
+use clap::Parser;
 
-use aoc::{Client, Puzzle, PuzzleId, Submit};
-
-#[derive(Parser)]
-#[command(version, author, propagate_version = true)]
-struct Args {
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(Subcommand)]
-enum Command {
-    Get {
-        #[arg(long, short)]
-        year: Option<u32>,
-        #[arg(long, short)]
-        day: Option<u32>,
-        /// The output directory.
-        output: Option<PathBuf>,
-    },
-    Submit {
-        answer: String,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(2015..=2024))]
-        year: Option<u32>,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=24))]
-        day: Option<u32>,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=2))]
-        part: Option<u32>,
-    },
-    View {
-        #[arg(long, short)]
-        year: Option<u32>,
-        #[arg(long, short)]
-        day: Option<u32>,
-    },
-}
+use aoc::{Args, Client, Command, Puzzle, PuzzleId, Submit};
+use tracing::{debug, error};
 
 fn id_to_path((y, d): (u32, u32)) -> PathBuf {
     Path::new(&y.to_string()).join(d.to_string())
 }
 
+const AUTH_VAR: &str = "AOC_AUTH_COOKIE";
+
 fn main() -> Result<()> {
     let args = Args::parse();
-    let client = Client::new()?;
+    setup_logging()?;
 
+    let auth = env::var(AUTH_VAR).unwrap_or_else(|e| {
+        error!(cause = %e, "Environment variable `{AUTH_VAR}` not found");
+        process::exit(1);
+    });
+
+    let client = Client::new(&auth)?;
     let cache = Path::new(&env::var("HOME").unwrap()).join("dev/comp/aocli/cache");
 
     match args.command {
@@ -58,10 +34,10 @@ fn main() -> Result<()> {
             let puzzle_path = cache.join(id_to_path(id));
             let puzzle = match Puzzle::read(&puzzle_path, id) {
                 Some(puzzle) => {
-                    println!("puzzle from cache");
+                    debug!("puzzle from cache");
                     if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
-                        println!("next part");
-                        let next_part = client.get_puzzle(id)?;
+                        debug!("next part");
+                        let next_part = client.get_puzzle(&id)?;
                         next_part.write(&puzzle_path)?;
                         next_part
                     } else {
@@ -69,17 +45,17 @@ fn main() -> Result<()> {
                     }
                 }
                 None => {
-                    let puzzle = client.get_puzzle(id)?;
+                    let puzzle = client.get_puzzle(&id)?;
                     puzzle.write(&puzzle_path)?;
                     puzzle
                 }
             };
             let input_path = puzzle_path.join("input");
             let input = if input_path.exists() {
-                println!("input from cache");
+                debug!("input from cache");
                 fs::read_to_string(&input_path)?
             } else {
-                let input = client.get_input(id)?;
+                let input = client.get_input(&id)?;
                 fs::write(&input_path, &input)?;
                 input
             };
@@ -108,16 +84,16 @@ fn main() -> Result<()> {
                     1
                 }
             });
-            match client.submit(id, part, &answer)? {
+            match client.submit(&id, part, &answer)? {
                 Submit::Correct(msg) => {
-                    println!("{msg}");
+                    debug!("{msg}");
                     if part == 1 {
-                        let puzzle = client.get_puzzle(id)?;
+                        let puzzle = client.get_puzzle(&id)?;
                         puzzle.write(&puzzle_path)?;
                     }
                     fs::write(puzzle_path.join(format!("answer{part}")), &answer)?;
                 }
-                any => println!("{any:?}"),
+                any => debug!("{any:?}"),
             }
         }
 
@@ -126,10 +102,8 @@ fn main() -> Result<()> {
             let puzzle_path = cache.join(id_to_path(id));
             let puzzle = match Puzzle::read(&puzzle_path, id) {
                 Some(puzzle) => {
-                    println!("puzzle from cache");
                     if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
-                        println!("next part");
-                        let next_part = client.get_puzzle(id)?;
+                        let next_part = client.get_puzzle(&id)?;
                         next_part.write(&puzzle_path)?;
                         next_part
                     } else {
@@ -137,12 +111,13 @@ fn main() -> Result<()> {
                     }
                 }
                 None => {
-                    let puzzle = client.get_puzzle(id)?;
+                    let puzzle = client.get_puzzle(&id)?;
                     puzzle.write(&puzzle_path)?;
                     puzzle
                 }
             };
-            println!("{}\n{}", puzzle.q1, puzzle.q2);
+            let view = format!("{}\n{}", puzzle.q1, puzzle.q2);
+            println!("{view}");
         }
     }
 
@@ -153,8 +128,8 @@ fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
     validate_puzzle_id(match (year, day) {
         (Some(y), Some(d)) => (y, d),
         _ => find_current_puzzle_id().unwrap_or_else(|| {
-            eprintln!("Could not determine puzzle from current directory");
-            std::process::exit(1);
+            error!("Could not determine puzzle from current directory");
+            process::exit(1);
         }),
     })
 }
@@ -197,4 +172,21 @@ fn find_current_puzzle_id() -> Option<PuzzleId> {
         }
     }
     None
+}
+
+fn setup_logging() -> Result<()> {
+    use tracing::level_filters::LevelFilter;
+    use tracing_subscriber::EnvFilter;
+
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::DEBUG.into())
+        .from_env()?
+        .add_directive("hyper::proto=info".parse()?);
+
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .compact()
+        .init();
+
+    Ok(())
 }

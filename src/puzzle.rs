@@ -4,7 +4,7 @@ pub type PuzzleId = (u32, u32);
 
 #[derive(Debug, Default)]
 pub struct Puzzle {
-    pub id: (u32, u32),
+    pub id: PuzzleId,
     pub q1: String,
     pub q2: String,
     pub a1: String,
