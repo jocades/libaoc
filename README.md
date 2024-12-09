@@ -12,9 +12,14 @@ Advent of Code CLI and utilities.
 
 ## CLI
 
+Handle **puzzle retrieval**, **viewing** and **submission** from the **command line**.
+
 - `Get` the puzzle's questions and input. The **contents** are **cached** after every request / submission.
 - `Submit` the answer in a couple of key presses.
 - `View` the puzzle from the terminal or editor in **markdown** format.
+
+> [!WARNING]
+> An `AOC_AUTH_TOKEN` environment variable is necessary for user validation. See [here](#session-token) to find out how to get your token.
 
 ### Install
 
@@ -77,8 +82,7 @@ Options:
 
 ## API
 
-A `Rust client` for the Advent of Code API. It needs aoc's session token to
-verify the user.
+A **Rust client** for the Advent of Code API.
 
 ### Install
 
@@ -88,14 +92,18 @@ cargo add libaoc
 
 ### Example
 
+Use the client to scrape a puzzle from the website. The session token is
+required to verify the user.
+
 ```rs
 use libaoc:::Client;
 
 let token = "53616c...";
 let client = Client::new(token)?;
+let puzzle = client.scrape_puzzle((2024, 1));
 ```
 
-Get a puzzle from the cache or by scraping the website
+Get a puzzle from the cache or by scraping the website if the puzzle is not present.
 
 ```rs
 let id = (2024, 1);
@@ -104,10 +112,28 @@ prinln!("q1 {}", puzzle.q1);
 prinln!("a1 {}", puzzle.a1);
 ```
 
-Submit an answer.
+Submit an answer. When using the CLI the id and part can be automatically
+determined when omitted.
 
 ```rs
 let id = (2024, 1);
 let part = 2;
 client.submit(&id, part, "answer")?;
 ```
+
+Refresh the in cache puzzle by re-scraping the website. This is done after a
+successful submission of part one to retrieve part two automatically.
+
+```rs
+let puzzle = client.refresh_puzzle((2024, 1))
+```
+
+## Session token
+
+To correctly set your `AOC_AUTH_TOKEN` environment variable, find the `cookie`
+field in the request headers used when requesting a page, `https://adventofcode.com/2015/day/1`
+for example, you can do so by opening the `network panel` in your browser and
+check for the field `cookie` in the request headers of the current page. You
+can also right click on the request and copy the cURL command used.
+
+Remember that you `must be logged in` for your session cookie to be present in your request headers.

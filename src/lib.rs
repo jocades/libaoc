@@ -52,7 +52,7 @@ impl Client {
         Ok(puzzle)
     }
 
-    fn scrape_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
+    pub fn scrape_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         let html = self
             .http
             .get(self.mkurl(id))
@@ -220,20 +220,20 @@ impl Puzzle {
         let path = path.as_ref();
         Puzzle {
             id: id.clone(),
-            q1: fs::read_to_string(path.join("question1")).unwrap_or_default(),
-            q2: fs::read_to_string(path.join("question2")).unwrap_or_default(),
-            a1: fs::read_to_string(path.join("answer1")).unwrap_or_default(),
-            a2: fs::read_to_string(path.join("answer2")).unwrap_or_default(),
+            q1: fs::read_to_string(path.join("q1")).unwrap_or_default(),
+            q2: fs::read_to_string(path.join("q2")).unwrap_or_default(),
+            a1: fs::read_to_string(path.join("a1")).unwrap_or_default(),
+            a2: fs::read_to_string(path.join("a2")).unwrap_or_default(),
         }
     }
 
     pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         fs::create_dir_all(path)?;
-        fs::write(path.join("question1"), self.q1.as_bytes())?;
-        fs::write(path.join("question2"), self.q2.as_bytes())?;
-        fs::write(path.join("answer1"), self.a1.as_bytes())?;
-        fs::write(path.join("answer2"), self.a2.as_bytes())?;
+        fs::write(path.join("q1"), self.q1.as_bytes())?;
+        fs::write(path.join("q2"), self.q2.as_bytes())?;
+        fs::write(path.join("a1"), self.a1.as_bytes())?;
+        fs::write(path.join("a2"), self.a2.as_bytes())?;
         Ok(())
     }
 }
@@ -277,7 +277,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn from_path() -> Result<()> {
+    fn from_path() {
         let path = Path::new("/Users/j0rdi/aoc/2015/d01");
         assert_eq!(puzzle_id_from_path(&path), Some((2015, 1)));
 
@@ -289,6 +289,5 @@ mod tests {
 
         let path = Path::new("/Users/j0rdi/aoc/2017/other/08/sub");
         assert_eq!(puzzle_id_from_path(&path), Some((2017, 8)));
-        Ok(())
     }
 }
