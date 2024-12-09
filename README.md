@@ -110,10 +110,12 @@ let id = (2024, 1);
 let puzzle = client.get_puzzle(&id)?;
 prinln!("q1 {}", puzzle.q1);
 prinln!("a1 {}", puzzle.a1);
+
+fs::write("input", client.get_input(&id)?);
 ```
 
-Submit an answer. When using the CLI the id and part can be automatically
-determined when omitted.
+Submit an answer. When using the CLI the `id` and `part` can be automatically
+determined if omitted.
 
 ```rs
 let id = (2024, 1);
@@ -125,7 +127,7 @@ Refresh the in cache puzzle by re-scraping the website. This is done after a
 successful submission of part one to retrieve part two automatically.
 
 ```rs
-let puzzle = client.refresh_puzzle((2024, 1))
+let puzzle = client.refresh_puzzle((2024, 1))?;
 ```
 
 ## Session token
