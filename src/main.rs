@@ -1,13 +1,12 @@
 use std::{
-    env, fs, io,
+    env, fs,
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use reqwest::header::HeaderMap;
-use reqwest::{blocking::Client, redirect::Policy};
-use scraper::{Html, Selector};
+
+use aoc::{Client, Puzzle, PuzzleId};
 
 #[derive(Parser)]
 #[command(version, author, propagate_version = true)]
@@ -38,111 +37,26 @@ enum Command {
     },
 }
 
-const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
-
-fn aoc_url(year: u32, day: u32) -> String {
-    format!("https://adventofcode.com/{year}/day/{day}")
-}
-
-#[derive(Debug, Default)]
-struct Puzzle {
-    id: (u32, u32),
-    q1: String,
-    q2: String,
-    a1: String,
-    a2: String,
-}
-
 fn id_to_path((y, d): (u32, u32)) -> PathBuf {
     Path::new(&y.to_string()).join(&d.to_string())
 }
 
-impl Puzzle {
-    fn read(path: impl AsRef<Path>, year: u32, day: u32) -> Option<Puzzle> {
-        let path = path.as_ref();
-        path.exists().then(|| Puzzle {
-            id: (year, day),
-            q1: fs::read_to_string(path.join("question1")).unwrap_or_default(),
-            q2: fs::read_to_string(path.join("question2")).unwrap_or_default(),
-            a1: fs::read_to_string(path.join("answer1")).unwrap_or_default(),
-            a2: fs::read_to_string(path.join("answer2")).unwrap_or_default(),
-        })
-    }
-
-    fn write(&self, path: impl AsRef<Path>) -> io::Result<()> {
-        let path = path.as_ref();
-        fs::create_dir_all(&path)?;
-        fs::write(path.join("question1"), self.q1.as_bytes())?;
-        fs::write(path.join("question2"), self.q2.as_bytes())?;
-        fs::write(path.join("answer1"), self.a1.as_bytes())?;
-        fs::write(path.join("answer2"), self.a2.as_bytes())?;
-        Ok(())
-    }
-
-    fn scrape(client: &Client, year: u32, day: u32) -> Result<Puzzle> {
-        let url = aoc_url(year, day);
-        let html = client.get(&url).send().context("get puzzle")?.text()?;
-        let doc = Html::parse_document(&html);
-
-        let selector = Selector::parse("article.day-desc").unwrap();
-        let mut select = doc.select(&selector);
-        let q1 = select
-            .next()
-            .map(|el| html2text::from_read(el.inner_html().as_bytes(), 80).unwrap());
-        let q2 = select
-            .next()
-            .map(|el| html2text::from_read(el.inner_html().as_bytes(), 80).unwrap());
-
-        let selector = Selector::parse("article.day-desc + p code").unwrap();
-        let mut select = doc.select(&selector);
-        let a1 = select.next().map(|el| el.text().collect::<String>());
-        let a2 = select.next().map(|el| el.text().collect::<String>());
-
-        let puzzle = Puzzle {
-            id: (year, day),
-            q1: q1.unwrap_or_default(),
-            q2: q2.unwrap_or_default(),
-            a1: a1.unwrap_or_default(),
-            a2: a2.unwrap_or_default(),
-        };
-
-        Ok(puzzle)
-    }
-}
-
-fn scrape_input(client: &Client, year: u32, day: u32) -> Result<String> {
-    let url = format!("{}/input", aoc_url(year, day));
-    let data = client.get(&url).send().context("get input")?.text()?;
-    Ok(data)
-}
-
 fn main() -> Result<()> {
     let args = Args::parse();
-    let auth = env::var("AOC_AUTH_COOKIE")
-        .map(|token| format!("session={token}"))
-        .unwrap_or_else(|_| {
-            eprintln!("Must provide auth cookie.");
-            std::process::exit(1)
-        });
-
-    let headers = HeaderMap::from_iter([("cookie".parse()?, auth.parse()?)]);
-    let client = Client::builder()
-        .user_agent("aocli.rs")
-        .default_headers(headers)
-        .redirect(Policy::none())
-        .build()?;
+    let client = Client::new()?;
 
     let cache = Path::new("cache");
 
     match args.command {
         Command::Get { year, day, output } => {
-            let puzzle_path = cache.join(id_to_path((year, day)));
+            let id = (year, day);
+            let puzzle_path = cache.join(id_to_path(id));
             let puzzle = match Puzzle::read(&puzzle_path, year, day) {
                 Some(puzzle) => {
                     println!("input from cache");
                     if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
                         println!("next part");
-                        let puzzle = Puzzle::scrape(&client, year, day)?;
+                        let puzzle = client.get_puzzle(id)?;
                         puzzle.write(&puzzle_path)?;
                         puzzle
                     } else {
@@ -150,7 +64,7 @@ fn main() -> Result<()> {
                     }
                 }
                 None => {
-                    let puzzle = Puzzle::scrape(&client, year, day)?;
+                    let puzzle = client.get_puzzle(id)?;
                     puzzle.write(&puzzle_path)?;
                     puzzle
                 }
@@ -160,7 +74,7 @@ fn main() -> Result<()> {
                 println!("puzzle from cache");
                 fs::read_to_string(&input_path)?
             } else {
-                let input = scrape_input(&client, year, day)?;
+                let input = client.get_input(id)?;
                 fs::write(&input_path, &input)?;
                 input
             };
@@ -180,76 +94,51 @@ fn main() -> Result<()> {
             day,
             part,
         } => {
-            let (year, day) = match (year, day) {
+            let id = match (year, day) {
                 (Some(y), Some(d)) => (y, d),
-                _ => {
-                    let mut day = 0;
-                    let mut year = 0;
-                    for parent in env::current_dir()?.ancestors() {
-                        let mut chars = parent.file_name().unwrap().to_str().unwrap().chars();
-                        let mut s = String::new();
-                        while let Some(c) = chars.next() {
-                            if c.is_ascii_digit() {
-                                s.push(c);
-                                while let Some(c) = chars.next() {
-                                    if !c.is_ascii_digit() {
-                                        break;
-                                    }
-                                    s.push(c);
-                                }
-                            }
-                        }
-                        if !s.is_empty() {
-                            if day == 0 {
-                                day = s.parse().unwrap();
-                            } else {
-                                year = s.parse().unwrap();
-                            }
-                        }
-                        if year > 0 {
-                            break;
-                        }
-                    }
-                    (year, day)
-                }
+                _ => find_current_puzzle_id().unwrap_or_else(|| {
+                    eprintln!("Could not determine current puzzle from cwd");
+                    std::process::exit(1)
+                }),
             };
-            assert!(day > 0 && year > 0);
-            let aoc = aoc_url(year, day);
-            let url = format!("{aoc}/answer");
-            println!("day={day} year={year} answer={answer} url={url}");
-
-            return Ok(());
 
             let part = part.unwrap_or(1);
-
-            let html = client
-                .post(&url)
-                .header("content-type", "application/x-www-form-urlencoded")
-                .body(format!("level={part}&answer={answer}"))
-                .send()?
-                .text()?;
-
-            if html.contains("That's the right answer") {
-                println!("Correct!");
-                if part == 1 {
-                    let puzzle = Puzzle::scrape(&client, year, day)?;
-                    let puzzle_path = cache.join(id_to_path((year, day)));
-                    puzzle.write(&puzzle_path)?;
-                }
-                fs::write(
-                    cache.join(id_to_path((year, day)).join(format!("answer{part}"))),
-                    &answer,
-                )?;
-            } else if html.contains("That's not the right answer") {
-                println!("Incorrect!");
-            } else if html.contains("You gave an answer too recently") {
-                println!("Wait!");
-            } else {
-                eprintln!("error: unknown response");
-                std::process::exit(1);
+            match client.submit(id, part, answer)? {
+                any => println!("{any:?}"),
             }
         }
     }
 
     Ok(())
+}
+
+fn find_current_puzzle_id() -> Option<PuzzleId> {
+    let mut day = 0;
+    let mut year = 0;
+    for parent in env::current_dir().unwrap().ancestors() {
+        let mut chars = parent.file_name().unwrap().to_str().unwrap().chars();
+        let mut s = String::new();
+        while let Some(c) = chars.next() {
+            if c.is_ascii_digit() {
+                s.push(c);
+                while let Some(c) = chars.next() {
+                    if !c.is_ascii_digit() {
+                        break;
+                    }
+                    s.push(c);
+                }
+            }
+        }
+        if !s.is_empty() {
+            if day == 0 {
+                day = s.parse().unwrap();
+            } else {
+                year = s.parse().unwrap();
+            }
+        }
+        if year > 0 {
+            return Some((year, day));
+        }
+    }
+    None
 }
