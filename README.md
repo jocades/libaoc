@@ -100,7 +100,7 @@ use libaoc:::Client;
 
 let token = "53616c...";
 let client = Client::new(token)?;
-let puzzle = client.scrape_puzzle((2024, 1));
+let puzzle = client.scrape_puzzle((2024, 1))?;
 ```
 
 Get a puzzle from the cache or by scraping the website if the puzzle is not present.
