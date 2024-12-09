@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use clap::{Parser, Subcommand};
 
 use aoc::{Client, Puzzle, PuzzleId, Submit};
@@ -25,7 +25,6 @@ enum Command {
         /// The output directory.
         output: Option<PathBuf>,
     },
-
     Submit {
         answer: String,
         #[arg(long, short, value_parser = clap::value_parser!(u32).range(2015..=2024))]
@@ -34,6 +33,12 @@ enum Command {
         day: Option<u32>,
         #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=2))]
         part: Option<u32>,
+    },
+    View {
+        #[arg(long, short)]
+        year: Option<u32>,
+        #[arg(long, short)]
+        day: Option<u32>,
     },
 }
 
@@ -49,11 +54,11 @@ fn main() -> Result<()> {
 
     match args.command {
         Command::Get { year, day, output } => {
-            let id = puzzle_id(year, day);
+            let id = puzzle_id(year, day)?;
             let puzzle_path = cache.join(id_to_path(id));
             let puzzle = match Puzzle::read(&puzzle_path, id) {
                 Some(puzzle) => {
-                    println!("input from cache");
+                    println!("puzzle from cache");
                     if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
                         println!("next part");
                         let next_part = client.get_puzzle(id)?;
@@ -71,7 +76,7 @@ fn main() -> Result<()> {
             };
             let input_path = puzzle_path.join("input");
             let input = if input_path.exists() {
-                println!("puzzle from cache");
+                println!("input from cache");
                 fs::read_to_string(&input_path)?
             } else {
                 let input = client.get_input(id)?;
@@ -94,12 +99,18 @@ fn main() -> Result<()> {
             day,
             part,
         } => {
-            let id = puzzle_id(year, day);
-            let part = part.unwrap_or(1);
+            let id = puzzle_id(year, day)?;
+            let puzzle_path = cache.join(id_to_path(id));
+            let part = part.unwrap_or_else(|| {
+                if fs::metadata(puzzle_path.join("answer1")).is_ok_and(|m| m.len() > 0) {
+                    2
+                } else {
+                    1
+                }
+            });
             match client.submit(id, part, &answer)? {
                 Submit::Correct(msg) => {
                     println!("{msg}");
-                    let puzzle_path = cache.join(id_to_path(id));
                     if part == 1 {
                         let puzzle = client.get_puzzle(id)?;
                         puzzle.write(&puzzle_path)?;
@@ -109,19 +120,49 @@ fn main() -> Result<()> {
                 any => println!("{any:?}"),
             }
         }
+
+        Command::View { year, day } => {
+            let id = puzzle_id(year, day)?;
+            let puzzle_path = cache.join(id_to_path(id));
+            let puzzle = match Puzzle::read(&puzzle_path, id) {
+                Some(puzzle) => {
+                    println!("puzzle from cache");
+                    if !puzzle.a1.is_empty() && puzzle.q2.is_empty() {
+                        println!("next part");
+                        let next_part = client.get_puzzle(id)?;
+                        next_part.write(&puzzle_path)?;
+                        next_part
+                    } else {
+                        puzzle
+                    }
+                }
+                None => {
+                    let puzzle = client.get_puzzle(id)?;
+                    puzzle.write(&puzzle_path)?;
+                    puzzle
+                }
+            };
+            println!("{}\n{}", puzzle.q1, puzzle.q2);
+        }
     }
 
     Ok(())
 }
 
-fn puzzle_id(year: Option<u32>, day: Option<u32>) -> PuzzleId {
-    match (year, day) {
+fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
+    validate_puzzle_id(match (year, day) {
         (Some(y), Some(d)) => (y, d),
         _ => find_current_puzzle_id().unwrap_or_else(|| {
-            eprintln!("Could not determine current puzzle from cwd");
-            std::process::exit(1)
+            eprintln!("Could not determine puzzle from current directory");
+            std::process::exit(1);
         }),
-    }
+    })
+}
+
+fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
+    ensure!(2015 <= year && year < 2025, "Invalid year: {year}");
+    ensure!(1 <= day && day < 25, "Invalid day: {day}");
+    Ok((year, day))
 }
 
 fn find_current_puzzle_id() -> Option<PuzzleId> {
