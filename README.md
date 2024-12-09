@@ -92,7 +92,7 @@ cargo add libaoc
 
 ### Example
 
-Use the client to scrape a puzzle from the website. The session token is
+Use the client to scrape a puzzle from the website. The [session token](#session-token) is
 required to verify the user.
 
 ```rs
