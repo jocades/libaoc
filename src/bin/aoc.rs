@@ -1,4 +1,8 @@
-use std::{env, fs, process};
+use std::{
+    env, fs,
+    path::{self, Path, PathBuf},
+    process,
+};
 
 use anyhow::{ensure, Result};
 use clap::{value_parser, Parser, Subcommand};
@@ -29,7 +33,7 @@ enum Command {
         #[command(flatten)]
         yd: YearDay,
         /// The output directory, default: `.`
-        output: Option<std::path::PathBuf>,
+        output: Option<PathBuf>,
         /// Build the directories `./year/day/`
         #[arg(long, short)]
         build: bool,
@@ -57,10 +61,18 @@ fn main() -> Result<()> {
     });
 
     let client = Client::new(&token)?;
+    let nvim = env::var("__NVIM_AOC").ok().map(|p| PathBuf::from(p));
 
     match args.command {
         Command::Get { yd, output, build } => {
-            let id = puzzle_id(yd.year, yd.day)?;
+            let id = match &nvim {
+                Some(path) => libaoc::puzzle_id_from_path(&path).unwrap_or_else(|| {
+                    error!("Could not determine puzzle id from {nvim:?}");
+                    process::exit(1);
+                }),
+                None => puzzle_id(yd.year, yd.day)?,
+            };
+
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
 
@@ -115,37 +127,7 @@ fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
 }
 
 fn find_current_puzzle_id() -> Option<PuzzleId> {
-    let mut day = 0xff;
-    let mut year = 0;
-    for parent in env::current_dir().unwrap().ancestors() {
-        let mut chars = parent
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .chars()
-            .peekable();
-        let mut buf = String::new();
-        while let Some(c) = chars.next() {
-            if c.is_ascii_digit() {
-                buf.push(c);
-                if !chars.peek().is_some_and(|c| c.is_ascii_digit()) {
-                    break;
-                }
-            }
-        }
-        if !buf.is_empty() {
-            if day == 0xff {
-                day = buf.parse().unwrap();
-            } else {
-                year = buf.parse().unwrap();
-            }
-        }
-        if year > 0 {
-            return Some((year, day));
-        }
-    }
-    None
+    libaoc::puzzle_id_from_path(&env::current_dir().unwrap())
 }
 
 fn setup_logging(verbose: bool) -> Result<()> {

@@ -237,3 +237,58 @@ impl Puzzle {
         Ok(())
     }
 }
+
+pub fn puzzle_id_from_path(path: &Path) -> Option<PuzzleId> {
+    let mut day = 0xff;
+    let mut year = 0;
+    for parent in path.ancestors() {
+        let mut chars = parent
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .chars()
+            .peekable();
+        let mut buf = String::new();
+        while let Some(c) = chars.next() {
+            if c.is_ascii_digit() {
+                buf.push(c);
+                if !chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                    break;
+                }
+            }
+        }
+        if !buf.is_empty() {
+            if day == 0xff {
+                day = buf.parse().unwrap();
+            } else {
+                year = buf.parse().unwrap();
+            }
+        }
+        if year > 0 {
+            return Some((year, day));
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_path() -> Result<()> {
+        let path = Path::new("/Users/j0rdi/aoc/2015/d01");
+        assert_eq!(puzzle_id_from_path(&path), Some((2015, 1)));
+
+        let path = Path::new("/Users/j0rdi/aoc/2024/25");
+        assert_eq!(puzzle_id_from_path(&path), Some((2024, 25)));
+
+        let path = Path::new("/Users/j0rdi/aoc/2017/other/d8");
+        assert_eq!(puzzle_id_from_path(&path), Some((2017, 8)));
+
+        let path = Path::new("/Users/j0rdi/aoc/2017/other/08/sub");
+        assert_eq!(puzzle_id_from_path(&path), Some((2017, 8)));
+        Ok(())
+    }
+}
