@@ -133,7 +133,7 @@ let puzzle = client.refresh_puzzle((2024, 4))?;
 ## Session token
 
 To correctly set your `AOC_AUTH_TOKEN` environment variable, find the `cookie`
-field in the request headers used when requesting a page, [this one](`https://adventofcode.com/2015/day/1`)
+field in the request headers used when requesting a page, [this one](https://adventofcode.com/2015/day/1)
 for example, you can do so by opening the `network panel` in your browser and
 check for the field `cookie` in the request headers of the current page. You
 can also right click on the request and copy the cURL command used.
