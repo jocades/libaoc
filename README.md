@@ -96,7 +96,7 @@ Use the client to scrape a puzzle from the website. The [session token](#session
 required to verify the user.
 
 ```rs
-use libaoc:::Client;
+use libaoc::Client;
 
 let token = "53616c...";
 let client = Client::new(token)?;

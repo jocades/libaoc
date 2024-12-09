@@ -109,7 +109,7 @@ impl Client {
         answer: impl AsRef<str>,
     ) -> Result<Submit> {
         let part = part.unwrap_or_else(|| {
-            if fs::metadata(self.cache.mkpath(id).join("answer1")).is_ok_and(|m| m.len() > 0) {
+            if fs::metadata(self.cache.mkpath(id).join("a")).is_ok_and(|m| m.len() > 0) {
                 2
             } else {
                 1
@@ -190,7 +190,7 @@ impl Cache {
 
     #[allow(dead_code)]
     pub fn update_answer(&self, id: &PuzzleId, part: u32, answer: &str) {
-        fs::write(self.mkpath(id).join(format!("answer{part}")), answer)
+        fs::write(self.mkpath(id).join(format!("a{part}")), answer)
             .unwrap_or_else(|_| warn!(cause = "failed to update answer", "cache error"));
     }
 

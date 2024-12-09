@@ -1,8 +1,4 @@
-use std::{
-    env, fs,
-    path::{self, Path, PathBuf},
-    process,
-};
+use std::{env, fs, path::PathBuf, process};
 
 use anyhow::{ensure, Result};
 use clap::{value_parser, Parser, Subcommand};
