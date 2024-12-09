@@ -32,13 +32,13 @@ cargo install libaoc
 Retrieve the puzzle's questions and answers for a certain day and year.
 
 ```sh
-aoc get -y 2024 -d -1
+aoc get -y 2024 -d 4
 ```
 
 Submit an answer for a specific puzzle and part.
 
 ```sh
-aoc submit -y 2024 -d -1 -p 2 "answer"
+aoc submit -y 2024 -d 4 -p 2 "answer"
 Correct!
 ```
 
@@ -48,7 +48,7 @@ puzzle state. Almost all commands can be shortened in this way.
 
 ```sh
 pwd
-/Users/j0rdi/aoc/2024/d01
+/Users/j0rdi/aoc/2024/d04
 
 aoc submit "answer"
 Correct!
@@ -100,13 +100,13 @@ use libaoc:::Client;
 
 let token = "53616c...";
 let client = Client::new(token)?;
-let puzzle = client.scrape_puzzle((2024, 1))?;
+let puzzle = client.scrape_puzzle((2024, 4))?;
 ```
 
 Get a puzzle from the cache or by scraping the website if the puzzle is not present.
 
 ```rs
-let id = (2024, 1);
+let id = (2024, 4);
 let puzzle = client.get_puzzle(&id)?;
 prinln!("q1 {}", puzzle.q1);
 prinln!("a1 {}", puzzle.a1);
@@ -118,7 +118,7 @@ Submit an answer. When using the CLI the `id` and `part` can be automatically
 determined if omitted.
 
 ```rs
-let id = (2024, 1);
+let id = (2024, 4);
 let part = 2;
 client.submit(&id, part, "answer")?;
 ```
@@ -127,7 +127,7 @@ Refresh the in cache puzzle by re-scraping the website. This is done after a
 successful submission of part one to retrieve part two automatically.
 
 ```rs
-let puzzle = client.refresh_puzzle((2024, 1))?;
+let puzzle = client.refresh_puzzle((2024, 4))?;
 ```
 
 ## Session token
