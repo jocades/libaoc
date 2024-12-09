@@ -7,21 +7,23 @@ use anyhow::{Context, Result};
 use reqwest::header::HeaderMap;
 use reqwest::redirect::Policy;
 use scraper::{Html, Selector};
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 pub const AOC_URL: &str = "https://adventofcode.com";
 pub const AUTH_VAR: &str = "AOC_AUTH_TOKEN";
 pub const CACHE_PATH: &str = ".cache/aoc";
 
+/// A `(year, day)` pair to identify a puzzle.
 pub type PuzzleId = (u32, u32);
 
 fn home_dir() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| {
-        error!("Environment variable`HOME` not found");
+        error!("Environment variable `HOME` not found");
         std::process::exit(1);
     }))
 }
 
+/// The `Advent of Code` client handles puzzle retrieval and cache.
 pub struct Client {
     http: reqwest::blocking::Client,
     cache: Cache,
@@ -41,23 +43,20 @@ impl Client {
         })
     }
 
+    /// Get a puzzle from cache or by scraping the website if not found.
     pub fn get_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         if let Some(puzzle) = self.cache.get(id) {
-            debug!("puzzle from cache");
             return Ok(puzzle);
         }
-        debug!("new puzzle");
-        let puzzle = self.scrape_puzzle(id)?;
-        self.cache.insert(id, &puzzle);
-        Ok(puzzle)
+        self.refresh_puzzle(id)
     }
 
+    /// Scrape a puzzle's questions and answers.
     pub fn scrape_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         let html = self
             .http
             .get(self.mkurl(id))
-            .send()
-            .context("get puzzle")?
+            .send()?
             .error_for_status()?
             .text()?;
 
@@ -77,39 +76,45 @@ impl Client {
         let a2 = answers.next().map(|el| el.text().collect::<String>());
 
         Ok(Puzzle {
-            id: id.clone(),
-            q1: q1.unwrap_or_default(),
-            q2: q2.unwrap_or_default(),
-            a1: a1.unwrap_or_default(),
-            a2: a2.unwrap_or_default(),
+            id: *id,
+            q1,
+            q2,
+            a1,
+            a2,
         })
     }
 
+    /// Scrape a puzzle and insert in cache without checking previous cache.
+    pub fn refresh_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
+        let puzzle = self.scrape_puzzle(id)?;
+        self.cache.insert(id, &puzzle);
+        Ok(puzzle)
+    }
+
+    /// Get the puzzle's input from cache or by requesting the server.
     pub fn get_input(self, id: &PuzzleId) -> Result<String> {
         if let Some(input) = self.cache.get_input(id) {
-            debug!("input from cache");
             return Ok(input);
         }
-        debug!("new input");
         let input = self
             .http
-            .get(format!("{}/input", self.mkurl(&id)))
-            .send()
-            .context("get input")?
+            .get(format!("{}/input", self.mkurl(id)))
+            .send()?
             .error_for_status()?
             .text()?;
         self.cache.insert_input(id, &input);
         Ok(input)
     }
 
+    /// Submit a puzzle's answer for a specific part.
     pub fn submit(
         &self,
         id: &PuzzleId,
         part: Option<u32>,
         answer: impl AsRef<str>,
-    ) -> Result<Submit> {
+    ) -> Result<Option<Puzzle>> {
         let part = part.unwrap_or_else(|| {
-            if fs::metadata(self.cache.mkpath(id).join("a")).is_ok_and(|m| m.len() > 0) {
+            if fs::metadata(self.cache.mkpath(id).join("a1")).is_ok_and(|m| m.len() > 0) {
                 2
             } else {
                 1
@@ -121,32 +126,23 @@ impl Client {
             .post(format!("{}/answer", self.mkurl(id)))
             .header("content-type", "application/x-www-form-urlencoded")
             .body(format!("level={part}&answer={}", answer.as_ref()))
-            .send()
-            .context("submit puzzle")?
+            .send()?
             .error_for_status()?
             .text()?;
 
         Ok(if html.contains("That's the right answer") {
             info!("Correct!");
-            self.refresh_puzzle(id)?;
-            Submit::Correct
+            Some(self.refresh_puzzle(id)?)
         } else if html.contains("That's not the right answer") {
             error!("Incorrect!");
-            Submit::Incorrect
+            None
         } else if html.contains("You gave an answer too recently") {
             warn!("Wait!");
-            Submit::Wait
+            None
         } else {
             error!("Unknown response");
-            Submit::Error
+            None
         })
-    }
-
-    pub fn refresh_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
-        debug!("refresh puzzle");
-        let puzzle = self.scrape_puzzle(id)?;
-        self.cache.insert(id, &puzzle);
-        Ok(puzzle)
     }
 
     fn mkurl(&self, (y, d): &PuzzleId) -> String {
@@ -154,6 +150,7 @@ impl Client {
     }
 }
 
+/// A file system cache for the puzzles.
 struct Cache {
     path: PathBuf,
 }
@@ -162,7 +159,7 @@ impl Cache {
     pub fn new(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
         if !path.exists() {
-            fs::create_dir_all(&path).context("mkdir cache")?;
+            fs::create_dir_all(path).context("mkdir cache")?;
         }
         Ok(Self { path: path.into() })
     }
@@ -179,7 +176,7 @@ impl Cache {
 
     pub fn insert(&self, id: &PuzzleId, puzzle: &Puzzle) {
         puzzle
-            .write(self.mkpath(&id))
+            .write(self.mkpath(id))
             .unwrap_or_else(|_| warn!(cause = "failed to insert puzzle", "cache error"));
     }
 
@@ -199,49 +196,63 @@ impl Cache {
     }
 }
 
-pub enum Submit {
-    Correct,
-    Incorrect,
-    Wait,
-    Error,
-}
-
 #[derive(Debug, Default, Clone)]
 pub struct Puzzle {
     pub id: PuzzleId,
-    pub q1: String,
-    pub q2: String,
-    pub a1: String,
-    pub a2: String,
+    pub q1: Option<String>,
+    pub q2: Option<String>,
+    pub a1: Option<String>,
+    pub a2: Option<String>,
 }
 
 impl Puzzle {
     pub fn read(path: impl AsRef<Path>, id: &PuzzleId) -> Puzzle {
         let path = path.as_ref();
         Puzzle {
-            id: id.clone(),
-            q1: fs::read_to_string(path.join("q1")).unwrap_or_default(),
-            q2: fs::read_to_string(path.join("q2")).unwrap_or_default(),
-            a1: fs::read_to_string(path.join("a1")).unwrap_or_default(),
-            a2: fs::read_to_string(path.join("a2")).unwrap_or_default(),
+            id: *id,
+            q1: fs::read_to_string(path.join("q1")).ok(),
+            q2: fs::read_to_string(path.join("q2")).ok(),
+            a1: fs::read_to_string(path.join("a1")).ok(),
+            a2: fs::read_to_string(path.join("a2")).ok(),
         }
     }
 
     pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         fs::create_dir_all(path)?;
-        fs::write(path.join("q1"), self.q1.as_bytes())?;
-        fs::write(path.join("q2"), self.q2.as_bytes())?;
-        fs::write(path.join("a1"), self.a1.as_bytes())?;
-        fs::write(path.join("a2"), self.a2.as_bytes())?;
+        if let Some(q) = &self.q1 {
+            fs::write(path.join("q1"), q.as_bytes())?;
+        }
+        if let Some(q) = &self.q2 {
+            fs::write(path.join("q2"), q.as_bytes())?;
+        }
+        if let Some(a) = &self.a1 {
+            fs::write(path.join("a1"), a.as_bytes())?;
+        }
+        if let Some(a) = &self.a2 {
+            fs::write(path.join("a2"), a.as_bytes())?;
+        }
         Ok(())
+    }
+
+    pub fn view(&self) -> String {
+        format!(
+            "{}\n{}",
+            self.q1.as_deref().unwrap_or_default(),
+            self.q2.as_deref().unwrap_or_default()
+        )
+    }
+
+    pub fn write_view(&self, path: impl AsRef<Path>) -> Result<()> {
+        Ok(fs::write(path, self.view())?)
     }
 }
 
-pub fn puzzle_id_from_path(path: &Path) -> Option<PuzzleId> {
+/// Determine the puzzle's year and day from a path.
+pub fn puzzle_id_from_path(path: impl AsRef<Path>) -> Option<PuzzleId> {
     let mut day = 0xff;
     let mut year = 0;
-    for parent in path.ancestors() {
+    for parent in path.as_ref().ancestors() {
         let mut chars = parent
             .file_name()
             .unwrap()
@@ -278,16 +289,21 @@ mod tests {
 
     #[test]
     fn from_path() {
-        let path = Path::new("/Users/j0rdi/aoc/2015/d01");
-        assert_eq!(puzzle_id_from_path(&path), Some((2015, 1)));
-
-        let path = Path::new("/Users/j0rdi/aoc/2024/25");
-        assert_eq!(puzzle_id_from_path(&path), Some((2024, 25)));
-
-        let path = Path::new("/Users/j0rdi/aoc/2017/other/d8");
-        assert_eq!(puzzle_id_from_path(&path), Some((2017, 8)));
-
-        let path = Path::new("/Users/j0rdi/aoc/2017/other/08/sub");
-        assert_eq!(puzzle_id_from_path(&path), Some((2017, 8)));
+        assert_eq!(
+            puzzle_id_from_path("/Users/j0rdi/aoc/2015/d01"),
+            Some((2015, 1))
+        );
+        assert_eq!(
+            puzzle_id_from_path("/home/j0rdi/aoc/2024/25"),
+            Some((2024, 25))
+        );
+        assert_eq!(
+            puzzle_id_from_path("/Users/j0rdi/aoc/2017/other/d8"),
+            Some((2017, 8))
+        );
+        assert_eq!(
+            puzzle_id_from_path("/home/j0rdi/aoc/2017/other/08/sub"),
+            Some((2017, 8))
+        );
     }
 }

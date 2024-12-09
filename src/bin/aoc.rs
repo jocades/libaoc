@@ -52,23 +52,16 @@ fn main() -> Result<()> {
     setup_logging(args.verbose)?;
 
     let token = env::var(AUTH_VAR).unwrap_or_else(|e| {
-        error!(cause = %e, "Environment variable `{AUTH_VAR}` not found");
+        error!(cause = %e, AUTH_VAR);
         process::exit(1);
     });
 
     let client = Client::new(&token)?;
-    let nvim = env::var("__NVIM_AOC").ok().map(|p| PathBuf::from(p));
+    let dest = destination();
 
     match args.command {
         Command::Get { yd, output, build } => {
-            let id = match &nvim {
-                Some(path) => libaoc::puzzle_id_from_path(&path).unwrap_or_else(|| {
-                    error!("Could not determine puzzle id from {nvim:?}");
-                    process::exit(1);
-                }),
-                None => puzzle_id(yd.year, yd.day)?,
-            };
-
+            let id = puzzle_id(yd.year, yd.day)?;
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
 
@@ -78,32 +71,37 @@ fn main() -> Result<()> {
                     path.push('0');
                 }
                 path.push_str(&id.1.to_string());
-                std::path::PathBuf::from(path)
+                PathBuf::from(path)
             } else {
                 output.unwrap_or("./".into())
             };
             fs::create_dir_all(&dest)?;
-            fs::write(
-                dest.join("puzzle.md"),
-                format!("{}\n{}", puzzle.q1, puzzle.q2),
-            )?;
+            fs::write(dest.join("puzzle.md"), puzzle.view())?;
             fs::write(dest.join("input"), &input)?;
         }
 
         Command::Submit { answer, yd, part } => {
             let id = puzzle_id(yd.year, yd.day)?;
-            client.submit(&id, part, &answer)?;
+            if let Some(puzzle) = client.submit(&id, part, &answer)? {
+                puzzle.write_view(dest.join("puzzle.md"))?;
+            }
         }
 
         Command::View { yd } => {
             let id = puzzle_id(yd.year, yd.day)?;
             let puzzle = client.get_puzzle(&id)?;
-            let view = format!("{}\n{}", puzzle.q1, puzzle.q2);
-            println!("{view}");
+            println!("{}", puzzle.view());
         }
     }
 
     Ok(())
+}
+
+fn destination() -> PathBuf {
+    env::var("__NVIM_AOC")
+        .ok()
+        .map(PathBuf::from)
+        .unwrap_or(env::current_dir().unwrap())
 }
 
 fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
@@ -123,7 +121,7 @@ fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
 }
 
 fn find_current_puzzle_id() -> Option<PuzzleId> {
-    libaoc::puzzle_id_from_path(&env::current_dir().unwrap())
+    libaoc::puzzle_id_from_path(env::current_dir().unwrap())
 }
 
 fn setup_logging(verbose: bool) -> Result<()> {
