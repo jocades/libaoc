@@ -10,7 +10,7 @@ use scraper::{Html, Selector};
 use tracing::{debug, error, info, warn};
 
 pub const AOC_URL: &str = "https://adventofcode.com";
-pub const AUTH_VAR: &str = "AOC_AUTH_COOKIE";
+pub const AUTH_VAR: &str = "AOC_AUTH_TOKEN";
 pub const CACHE_PATH: &str = ".cache/aoc";
 
 pub type PuzzleId = (u32, u32);
