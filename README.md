@@ -19,7 +19,7 @@ Handle **puzzle retrieval**, **viewing** and **submission** from the **command l
 - `View` the puzzle from the terminal or editor in **markdown** format.
 
 > [!WARNING]
-> An `AOC_AUTH_TOKEN` environment variable is necessary for user validation. See [here](#session-token) to find out how to get your token.
+> An `AOC_AUTH_TOKEN` environment variable is required for user validation. See [here](#session-token).
 
 ### Install
 
