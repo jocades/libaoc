@@ -8,4 +8,4 @@ Advent of Code CLI and utilities.
 [crates-badge]: https://img.shields.io/crates/v/libaoc.svg
 [crates-url]: https://crates.io/crates/libaoc
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/jocades/libaoc/LICENSE
+[mit-url]: https://github.com/jocades/libaoc/blob/main/LICENSE
