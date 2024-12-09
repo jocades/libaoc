@@ -12,10 +12,10 @@ pub struct Puzzle {
 }
 
 impl Puzzle {
-    pub fn read(path: impl AsRef<Path>, year: u32, day: u32) -> Option<Puzzle> {
+    pub fn read(path: impl AsRef<Path>, id: PuzzleId) -> Option<Puzzle> {
         let path = path.as_ref();
         path.exists().then(|| Puzzle {
-            id: (year, day),
+            id,
             q1: fs::read_to_string(path.join("question1")).unwrap_or_default(),
             q2: fs::read_to_string(path.join("question2")).unwrap_or_default(),
             a1: fs::read_to_string(path.join("answer1")).unwrap_or_default(),
@@ -25,7 +25,7 @@ impl Puzzle {
 
     pub fn write(&self, path: impl AsRef<Path>) -> io::Result<()> {
         let path = path.as_ref();
-        fs::create_dir_all(&path)?;
+        fs::create_dir_all(path)?;
         fs::write(path.join("question1"), self.q1.as_bytes())?;
         fs::write(path.join("question2"), self.q2.as_bytes())?;
         fs::write(path.join("answer1"), self.a1.as_bytes())?;

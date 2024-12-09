@@ -38,7 +38,7 @@ impl Client {
     pub fn get_puzzle(&self, id: PuzzleId) -> Result<Puzzle> {
         let html = self
             .http
-            .get(&self.mkurl(&id))
+            .get(self.mkurl(&id))
             .send()
             .context("get puzzle")?
             .text()?;
@@ -84,27 +84,12 @@ impl Client {
 
         Ok(if html.contains("That's the right answer") {
             Submit::Correct("Correct!".into())
-            // println!("Correct!");
-            // if part == 1 {
-            //     // let puzzle = Puzzle::scrape(&client, year, day)?;
-            //     let puzzle = self.scrape_puzzle(id);
-            //     // let puzzle_path = cache.join(id_to_path((year, day)));
-            //     // puzzle.write(&puzzle_path)?;
-            // }
-            // fs::write(
-            //     cache.join(id_to_path((year, day)).join(format!("answer{part}"))),
-            //     &answer,
-            // )?;
         } else if html.contains("That's not the right answer") {
             Submit::Incorrect("Incorrect!".into())
-            // println!("Incorrect!");
         } else if html.contains("You gave an answer too recently") {
-            // println!("Wait!");
             Submit::Wait("Wait!".into())
         } else {
             Submit::Error("Unkwon response".into())
-            // eprintln!("error: unknown response");
-            // std::process::exit(1);
         })
     }
 
