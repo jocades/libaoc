@@ -15,45 +15,6 @@ pub const CACHE_PATH: &str = ".cache/aoc";
 
 pub type PuzzleId = (u32, u32);
 
-#[derive(clap::Parser)]
-#[command(version, author, propagate_version = true)]
-pub struct Args {
-    #[arg(long, short)]
-    pub verbose: bool,
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(clap::Subcommand)]
-pub enum Command {
-    Get {
-        #[arg(long, short)]
-        year: Option<u32>,
-        #[arg(long, short)]
-        day: Option<u32>,
-        /// The output directory, default: `.`
-        output: Option<std::path::PathBuf>,
-        /// Build the directories `./year/day/`
-        #[arg(long, short)]
-        build: bool,
-    },
-    Submit {
-        answer: String,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(2015..=2024))]
-        year: Option<u32>,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=24))]
-        day: Option<u32>,
-        #[arg(long, short, value_parser = clap::value_parser!(u32).range(1..=2))]
-        part: Option<u32>,
-    },
-    View {
-        #[arg(long, short)]
-        year: Option<u32>,
-        #[arg(long, short)]
-        day: Option<u32>,
-    },
-}
-
 fn home_dir() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| {
         error!("Environment variable`HOME` not found");

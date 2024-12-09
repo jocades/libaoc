@@ -1,10 +1,51 @@
 use std::{env, fs, process};
 
 use anyhow::{ensure, Result};
-use clap::Parser;
+use clap::{value_parser, Parser, Subcommand};
 use tracing::error;
 
-use libaoc::{Args, Client, Command, PuzzleId, AUTH_VAR};
+use libaoc::{Client, PuzzleId, AUTH_VAR};
+
+#[derive(Parser)]
+#[command(version, author, propagate_version = true)]
+struct Args {
+    #[arg(long, short)]
+    pub verbose: bool,
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(clap::Args)]
+struct YearDay {
+    #[arg(long, short, value_parser = value_parser!(u32).range(2015..=2025))]
+    year: Option<u32>,
+    #[arg(long, short, value_parser = value_parser!(u32).range(1..=24))]
+    day: Option<u32>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    Get {
+        #[command(flatten)]
+        yd: YearDay,
+        /// The output directory, default: `.`
+        output: Option<std::path::PathBuf>,
+        /// Build the directories `./year/day/`
+        #[arg(long, short)]
+        build: bool,
+    },
+    Submit {
+        #[command(flatten)]
+        yd: YearDay,
+        #[arg(long, short, value_parser = value_parser!(u32).range(1..=2))]
+        part: Option<u32>,
+        answer: String,
+    },
+    View {
+        #[command(flatten)]
+        yd: YearDay,
+    },
+}
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -18,13 +59,8 @@ fn main() -> Result<()> {
     let client = Client::new(&token)?;
 
     match args.command {
-        Command::Get {
-            year,
-            day,
-            output,
-            build,
-        } => {
-            let id = puzzle_id(year, day)?;
+        Command::Get { yd, output, build } => {
+            let id = puzzle_id(yd.year, yd.day)?;
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
 
@@ -46,18 +82,13 @@ fn main() -> Result<()> {
             fs::write(dest.join("input"), &input)?;
         }
 
-        Command::Submit {
-            answer,
-            year,
-            day,
-            part,
-        } => {
-            let id = puzzle_id(year, day)?;
+        Command::Submit { answer, yd, part } => {
+            let id = puzzle_id(yd.year, yd.day)?;
             client.submit(&id, part, &answer)?;
         }
 
-        Command::View { year, day } => {
-            let id = puzzle_id(year, day)?;
+        Command::View { yd } => {
+            let id = puzzle_id(yd.year, yd.day)?;
             let puzzle = client.get_puzzle(&id)?;
             let view = format!("{}\n{}", puzzle.q1, puzzle.q2);
             println!("{view}");
@@ -78,8 +109,8 @@ fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
 }
 
 fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
-    ensure!(2015 <= year && year < 2025, "Invalid year: {year}");
-    ensure!(1 <= day && day < 25, "Invalid day: {day}");
+    ensure!((2015..=2025).contains(&year), "Invalid year: {year}");
+    ensure!((1..=25).contains(&day), "Invalid day: {day}");
     Ok((year, day))
 }
 
