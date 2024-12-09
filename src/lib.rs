@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 
 pub const AOC_URL: &str = "https://adventofcode.com";
 pub const AUTH_VAR: &str = "AOC_AUTH_COOKIE";
-pub const CACHE_PATH: &str = "dev/comp/aocli/cache";
+pub const CACHE_PATH: &str = ".cache/aoc";
 
 pub type PuzzleId = (u32, u32);
 
@@ -31,8 +31,11 @@ pub enum Command {
         year: Option<u32>,
         #[arg(long, short)]
         day: Option<u32>,
-        /// The output directory.
+        /// The output directory, default: `.`
         output: Option<std::path::PathBuf>,
+        /// Build the directories `./year/day/`
+        #[arg(long, short)]
+        build: bool,
     },
     Submit {
         answer: String,
@@ -66,14 +69,14 @@ pub struct Client {
 impl Client {
     pub fn new(token: &str) -> Result<Self> {
         let mut headers = HeaderMap::new();
-        headers.insert("cookie", format!("sesison={token}").parse()?);
+        headers.insert("cookie", format!("session={token}").parse()?);
         Ok(Self {
             http: reqwest::blocking::Client::builder()
                 .user_agent("aocli.rs")
                 .default_headers(headers)
                 .redirect(Policy::none())
                 .build()?,
-            cache: Cache::new(home_dir().join(CACHE_PATH)),
+            cache: Cache::new(home_dir().join(CACHE_PATH))?,
         })
     }
 
@@ -94,6 +97,7 @@ impl Client {
             .get(self.mkurl(id))
             .send()
             .context("get puzzle")?
+            .error_for_status()?
             .text()?;
 
         let doc = Html::parse_document(&html);
@@ -131,6 +135,7 @@ impl Client {
             .get(format!("{}/input", self.mkurl(&id)))
             .send()
             .context("get input")?
+            .error_for_status()?
             .text()?;
         self.cache.insert_input(id, &input);
         Ok(input)
@@ -155,7 +160,9 @@ impl Client {
             .post(format!("{}/answer", self.mkurl(id)))
             .header("content-type", "application/x-www-form-urlencoded")
             .body(format!("level={part}&answer={}", answer.as_ref()))
-            .send()?
+            .send()
+            .context("submit puzzle")?
+            .error_for_status()?
             .text()?;
 
         Ok(if html.contains("That's the right answer") {
@@ -191,20 +198,22 @@ struct Cache {
 }
 
 impl Cache {
-    pub fn new(path: impl AsRef<Path>) -> Self {
-        Self {
-            path: path.as_ref().into(),
+    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
+            fs::create_dir_all(&path).context("mkdir cache")?;
         }
+        Ok(Self { path: path.into() })
     }
 
     pub fn get(&self, id: &PuzzleId) -> Option<Puzzle> {
-        Puzzle::read(self.mkpath(id), id)
+        let path = self.mkpath(id);
+        path.exists().then(|| Puzzle::read(path, id))
     }
 
     pub fn get_input(&self, id: &PuzzleId) -> Option<String> {
         let path = self.mkpath(id).join("input");
-        path.exists()
-            .then(|| fs::read_to_string(self.mkpath(id).join("input")).unwrap())
+        path.exists().then(|| fs::read_to_string(path).unwrap())
     }
 
     pub fn insert(&self, id: &PuzzleId, puzzle: &Puzzle) {
@@ -246,15 +255,15 @@ pub struct Puzzle {
 }
 
 impl Puzzle {
-    pub fn read(path: impl AsRef<Path>, id: &PuzzleId) -> Option<Puzzle> {
+    pub fn read(path: impl AsRef<Path>, id: &PuzzleId) -> Puzzle {
         let path = path.as_ref();
-        path.exists().then(|| Puzzle {
+        Puzzle {
             id: id.clone(),
             q1: fs::read_to_string(path.join("question1")).unwrap_or_default(),
             q2: fs::read_to_string(path.join("question2")).unwrap_or_default(),
             a1: fs::read_to_string(path.join("answer1")).unwrap_or_default(),
             a2: fs::read_to_string(path.join("answer2")).unwrap_or_default(),
-        })
+        }
     }
 
     pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {

@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use clap::Parser;
 use tracing::error;
 
-use aoc::{Args, Client, Command, PuzzleId, AUTH_VAR};
+use libaoc::{Args, Client, Command, PuzzleId, AUTH_VAR};
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -18,11 +18,26 @@ fn main() -> Result<()> {
     let client = Client::new(&token)?;
 
     match args.command {
-        Command::Get { year, day, output } => {
+        Command::Get {
+            year,
+            day,
+            output,
+            build,
+        } => {
             let id = puzzle_id(year, day)?;
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
-            let dest = output.unwrap_or("./".into());
+
+            let dest = if build {
+                let mut path = format!("{}/d", id.0);
+                if id.1 < 10 {
+                    path.push('0');
+                }
+                path.push_str(&id.1.to_string());
+                std::path::PathBuf::from(path)
+            } else {
+                output.unwrap_or("./".into())
+            };
             fs::create_dir_all(&dest)?;
             fs::write(
                 dest.join("puzzle.md"),
@@ -114,7 +129,7 @@ fn setup_logging(verbose: bool) -> Result<()> {
         })
         .from_env()?
         .add_directive("hyper::proto=info".parse()?)
-        .add_directive("aoc=debug".parse()?);
+        .add_directive("libaoc=debug".parse()?);
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

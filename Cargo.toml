@@ -1,7 +1,11 @@
 [package]
-name = "aoc"
+name = "libaoc"
+description = "Advent of Code CLI"
+authors = ["Jordi Calafat <jcalafat97@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/jocades/libaoc"
 
 [dependencies]
 anyhow = "1.0.94"
