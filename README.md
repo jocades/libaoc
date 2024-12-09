@@ -82,7 +82,7 @@ Options:
 
 ## API
 
-A **Rust client** for the Advent of Code API.
+A **Rust client** for the Advent of Code API. [Reference](https://docs.rs/libaoc).
 
 ### Install
 
