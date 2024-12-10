@@ -19,13 +19,6 @@ pub const CACHE_PATH: &str = ".cache/aoc";
 /// A `(year, day)` pair to identify a puzzle.
 pub type PuzzleId = (u32, u32);
 
-fn home_dir() -> PathBuf {
-    PathBuf::from(env::var("HOME").unwrap_or_else(|e| {
-        error!(cause = %e, "HOME");
-        process::exit(1);
-    }))
-}
-
 /// The `Advent of Code` client handles puzzle retrieval and cache.
 pub struct Client {
     http: reqwest::blocking::Client,
@@ -148,12 +141,12 @@ impl Client {
 
         match self.submission_outcome(&html) {
             Submit::Correct => {
-                info!("Correct!");
+                println!("Correct!");
                 return Ok(Some(self.download_puzzle(id)?));
             }
-            Submit::Incorrect => error!("Incorrect!"),
-            Submit::Wait => warn!("Wait!"),
-            Submit::Error => error!("Unknown response"),
+            Submit::Incorrect => println!("Incorrect!"),
+            Submit::Wait => println!("Wait!"),
+            Submit::Error => println!("Unknown response"),
         };
         Ok(None)
     }
@@ -281,18 +274,18 @@ impl Puzzle {
         let mut buf = String::new();
         if let Some(q1) = &self.q1 {
             let _ = writeln!(&mut buf, "{q1}");
-        }
-        if show_answers {
-            if let Some(a1) = &self.a1 {
-                let _ = writeln!(&mut buf, "Answer: {a1}.");
+            if show_answers {
+                if let Some(a1) = &self.a1 {
+                    let _ = writeln!(&mut buf, "Answer: {a1}.");
+                }
             }
         }
         if let Some(q2) = &self.q2 {
             let _ = writeln!(&mut buf, "\n{q2}");
-        }
-        if show_answers {
-            if let Some(a2) = &self.a2 {
-                let _ = writeln!(&mut buf, "Answer: {a2}.");
+            if show_answers {
+                if let Some(a2) = &self.a2 {
+                    let _ = writeln!(&mut buf, "Answer: {a2}.");
+                }
             }
         }
         buf
@@ -301,6 +294,13 @@ impl Puzzle {
     pub fn write_view(&self, path: impl AsRef<Path>) -> Result<()> {
         Ok(fs::write(path, self.view(true))?)
     }
+}
+
+fn home_dir() -> PathBuf {
+    PathBuf::from(env::var("HOME").unwrap_or_else(|e| {
+        error!(cause = %e, "HOME");
+        process::exit(1);
+    }))
 }
 
 /// Determine the puzzle's year and day from a path.
@@ -338,9 +338,41 @@ pub fn puzzle_id_from_path(path: impl AsRef<Path>) -> Option<PuzzleId> {
     None
 }
 
+struct Id(u32, u32);
+
+impl TryFrom<&Path> for Id {
+    type Error = &'static str;
+
+    fn try_from(path: &Path) -> Result<Self, Self::Error> {
+        match puzzle_id_from_path(path) {
+            Some((y, d)) => Ok(Id(y, d)),
+            None => Err("could not determine puzzle id from path"),
+        }
+    }
+}
+
+/* impl<P: AsRef<Path>> From<P> for Id {
+    fn from(value: P) -> Self {
+        todo!()
+    }
+} */
+
+impl From<(u32, u32)> for Id {
+    fn from((y, d): (u32, u32)) -> Self {
+        Id(y, d)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn take_id(id: &Id) {}
+
+    fn give_id() {
+        take_id(&(1, 2).into());
+        let id: Id = Path::new("/home/2015/d03").try_into().unwrap();
+    }
 
     #[test]
     fn from_path() {
