@@ -59,6 +59,33 @@ impl Client {
         self.download_puzzle(id)
     }
 
+    /// Scrape a puzzle and store in cache.
+    pub fn download_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
+        let puzzle = self.scrape_puzzle(id)?;
+        self.cache.insert(id, &puzzle);
+        Ok(puzzle)
+    }
+
+    /// Get the puzzle's input from cache or by requesting the server.
+    pub fn get_input(&self, id: &PuzzleId) -> Result<String> {
+        if let Some(input) = self.cache.get_input(id) {
+            return Ok(input);
+        }
+        self.download_input(id)
+    }
+
+    /// Retrieve the puzzle's input from the server and cache it.
+    pub fn download_input(&self, id: &PuzzleId) -> Result<String> {
+        let input = self
+            .http
+            .get(format!("{}/input", self.mkurl(id)))
+            .send()?
+            .error_for_status()?
+            .text()?;
+        self.cache.insert_input(id, &input);
+        Ok(input)
+    }
+
     /// Scrape a puzzle's questions and answers.
     pub fn scrape_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         let html = self
@@ -92,28 +119,6 @@ impl Client {
         })
     }
 
-    /// Scrape a puzzle and save it in cache.
-    pub fn download_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
-        let puzzle = self.scrape_puzzle(id)?;
-        self.cache.insert(id, &puzzle);
-        Ok(puzzle)
-    }
-
-    /// Get the puzzle's input from cache or by requesting the server.
-    pub fn get_input(&self, id: &PuzzleId) -> Result<String> {
-        if let Some(input) = self.cache.get_input(id) {
-            return Ok(input);
-        }
-        let input = self
-            .http
-            .get(format!("{}/input", self.mkurl(id)))
-            .send()?
-            .error_for_status()?
-            .text()?;
-        self.cache.insert_input(id, &input);
-        Ok(input)
-    }
-
     /// Submit a puzzle's answer for a specific part.
     pub fn submit(
         &self,
@@ -141,19 +146,28 @@ impl Client {
             .error_for_status()?
             .text()?;
 
-        Ok(if html.contains("That's the right answer") {
-            info!("Correct!");
-            Some(self.download_puzzle(id)?)
-        } else if html.contains("That's not the right answer") {
-            error!("Incorrect!");
-            None
-        } else if html.contains("You gave an answer too recently") {
-            warn!("Wait!");
-            None
+        match self.submission_outcome(&html) {
+            Submit::Correct => {
+                info!("Correct!");
+                return Ok(Some(self.download_puzzle(id)?));
+            }
+            Submit::Incorrect => error!("Incorrect!"),
+            Submit::Wait => warn!("Wait!"),
+            Submit::Error => error!("Unknown response"),
+        };
+        Ok(None)
+    }
+
+    fn submission_outcome(&self, response: &str) -> Submit {
+        if response.contains("That's the right answer") {
+            Submit::Correct
+        } else if response.contains("That's not the right answer") {
+            Submit::Incorrect
+        } else if response.contains("You gave an answer too recently") {
+            Submit::Wait
         } else {
-            error!("Unknown response");
-            None
-        })
+            Submit::Error
+        }
     }
 
     fn mkurl(&self, (y, d): &PuzzleId) -> String {
@@ -161,7 +175,15 @@ impl Client {
     }
 }
 
-/// A file system cache for the puzzles.
+/// The outcome of a puzzle submission.
+pub enum Submit {
+    Correct,
+    Incorrect,
+    Wait,
+    Error,
+}
+
+/// A file system cache to store downloaded puzzles.
 struct Cache {
     path: PathBuf,
 }
