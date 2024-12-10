@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use clap::{value_parser, Parser, Subcommand};
 use tracing::error;
 
-use libaoc::{Client, PuzzleId, AUTH_VAR};
+use libaoc::{Client, PuzzleId};
 
 #[derive(Parser)]
 #[command(version, author, propagate_version = true)]
@@ -44,6 +44,9 @@ enum Command {
     View {
         #[command(flatten)]
         yd: YearDay,
+        /// Wether to show the answers for each part.
+        #[arg(long, short)]
+        answers: bool,
     },
 }
 
@@ -51,12 +54,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     setup_logging(args.verbose)?;
 
-    let token = env::var(AUTH_VAR).unwrap_or_else(|e| {
-        error!(cause = %e, AUTH_VAR);
-        process::exit(1);
-    });
-
-    let client = Client::new(&token)?;
+    let client = Client::new()?;
     let dest = destination();
 
     match args.command {
@@ -76,7 +74,7 @@ fn main() -> Result<()> {
                 output.unwrap_or("./".into())
             };
             fs::create_dir_all(&dest)?;
-            fs::write(dest.join("puzzle.md"), puzzle.view())?;
+            fs::write(dest.join("puzzle.md"), puzzle.view(true))?;
             fs::write(dest.join("input"), &input)?;
         }
 
@@ -87,10 +85,10 @@ fn main() -> Result<()> {
             }
         }
 
-        Command::View { yd } => {
+        Command::View { yd, answers } => {
             let id = puzzle_id(yd.year, yd.day)?;
             let puzzle = client.get_puzzle(&id)?;
-            println!("{}", puzzle.view());
+            println!("{}", puzzle.view(answers));
         }
     }
 

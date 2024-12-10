@@ -1,6 +1,9 @@
 use std::{
+    env,
+    fmt::Write,
     fs,
     path::{Path, PathBuf},
+    process,
 };
 
 use anyhow::{Context, Result};
@@ -17,9 +20,9 @@ pub const CACHE_PATH: &str = ".cache/aoc";
 pub type PuzzleId = (u32, u32);
 
 fn home_dir() -> PathBuf {
-    PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| {
-        error!("Environment variable `HOME` not found");
-        std::process::exit(1);
+    PathBuf::from(env::var("HOME").unwrap_or_else(|e| {
+        error!(cause = %e, "HOME");
+        process::exit(1);
     }))
 }
 
@@ -30,7 +33,12 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(token: &str) -> Result<Self> {
+    pub fn new() -> Result<Self> {
+        let token = env::var(AUTH_VAR).unwrap_or_else(|e| {
+            error!(cause = %e, AUTH_VAR);
+            process::exit(1);
+        });
+
         let mut headers = HeaderMap::new();
         headers.insert("cookie", format!("session={token}").parse()?);
         Ok(Self {
@@ -48,7 +56,7 @@ impl Client {
         if let Some(puzzle) = self.cache.get(id) {
             return Ok(puzzle);
         }
-        self.refresh_puzzle(id)
+        self.download_puzzle(id)
     }
 
     /// Scrape a puzzle's questions and answers.
@@ -84,8 +92,8 @@ impl Client {
         })
     }
 
-    /// Scrape a puzzle and insert in cache without checking previous cache.
-    pub fn refresh_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
+    /// Scrape a puzzle and save it in cache.
+    pub fn download_puzzle(&self, id: &PuzzleId) -> Result<Puzzle> {
         let puzzle = self.scrape_puzzle(id)?;
         self.cache.insert(id, &puzzle);
         Ok(puzzle)
@@ -113,8 +121,11 @@ impl Client {
         part: Option<u32>,
         answer: impl AsRef<str>,
     ) -> Result<Option<Puzzle>> {
+        // TODO: Check for answers in cache to be able to submit once the puzzle
+        // is finished.
+        let path = self.cache.mkpath(id);
         let part = part.unwrap_or_else(|| {
-            if fs::metadata(self.cache.mkpath(id).join("a1")).is_ok_and(|m| m.len() > 0) {
+            if fs::metadata(path.join("a1")).is_ok_and(|m| m.len() > 0) {
                 2
             } else {
                 1
@@ -132,7 +143,7 @@ impl Client {
 
         Ok(if html.contains("That's the right answer") {
             info!("Correct!");
-            Some(self.refresh_puzzle(id)?)
+            Some(self.download_puzzle(id)?)
         } else if html.contains("That's not the right answer") {
             error!("Incorrect!");
             None
@@ -174,21 +185,30 @@ impl Cache {
         path.exists().then(|| fs::read_to_string(path).unwrap())
     }
 
+    #[allow(dead_code)]
+    pub fn get_answers(&self, id: &PuzzleId) -> (Option<String>, Option<String>) {
+        let path = self.mkpath(id);
+        (
+            fs::read_to_string(path.join("a1")).ok(),
+            fs::read_to_string(path.join("a2")).ok(),
+        )
+    }
+
     pub fn insert(&self, id: &PuzzleId, puzzle: &Puzzle) {
         puzzle
             .write(self.mkpath(id))
-            .unwrap_or_else(|_| warn!(cause = "failed to insert puzzle", "cache error"));
+            .unwrap_or_else(|_| warn!("failed to insert puzzle"));
     }
 
     pub fn insert_input(&self, id: &PuzzleId, input: &str) {
         fs::write(self.mkpath(id).join("input"), input)
-            .unwrap_or_else(|_| warn!(cause = "failed to insert input", "cache error"));
+            .unwrap_or_else(|_| warn!("failed to insert input"));
     }
 
     #[allow(dead_code)]
     pub fn update_answer(&self, id: &PuzzleId, part: u32, answer: &str) {
         fs::write(self.mkpath(id).join(format!("a{part}")), answer)
-            .unwrap_or_else(|_| warn!(cause = "failed to update answer", "cache error"));
+            .unwrap_or_else(|_| warn!("failed to update answer"));
     }
 
     fn mkpath(&self, (y, d): &PuzzleId) -> PathBuf {
@@ -235,16 +255,29 @@ impl Puzzle {
         Ok(())
     }
 
-    pub fn view(&self) -> String {
-        format!(
-            "{}\n{}",
-            self.q1.as_deref().unwrap_or_default(),
-            self.q2.as_deref().unwrap_or_default()
-        )
+    pub fn view(&self, show_answers: bool) -> String {
+        let mut buf = String::new();
+        if let Some(q1) = &self.q1 {
+            let _ = writeln!(&mut buf, "{q1}");
+        }
+        if show_answers {
+            if let Some(a1) = &self.a1 {
+                let _ = writeln!(&mut buf, "Answer: {a1}.");
+            }
+        }
+        if let Some(q2) = &self.q2 {
+            let _ = writeln!(&mut buf, "\n{q2}");
+        }
+        if show_answers {
+            if let Some(a2) = &self.a2 {
+                let _ = writeln!(&mut buf, "Answer: {a2}.");
+            }
+        }
+        buf
     }
 
     pub fn write_view(&self, path: impl AsRef<Path>) -> Result<()> {
-        Ok(fs::write(path, self.view())?)
+        Ok(fs::write(path, self.view(true))?)
     }
 }
 
