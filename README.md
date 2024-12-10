@@ -39,7 +39,6 @@ Submit an answer for a specific puzzle and part.
 
 ```sh
 aoc submit -y 2024 -d 4 -p 2 "answer"
-Correct!
 ```
 
 If the day or year is omitted, it will be derived from the current directory's
@@ -51,7 +50,6 @@ pwd
 /Users/j0rdi/aoc/2024/d04
 
 aoc submit "answer"
-Correct!
 ```
 
 Take a look at the help.
