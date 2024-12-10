@@ -181,7 +181,7 @@ impl Cache {
     }
 
     pub fn get_input(&self, id: &PuzzleId) -> Option<String> {
-        let path = self.mkpath(id).join("input");
+        let path = self.mkpath(id).join("in");
         path.exists().then(|| fs::read_to_string(path).unwrap())
     }
 
@@ -201,7 +201,7 @@ impl Cache {
     }
 
     pub fn insert_input(&self, id: &PuzzleId, input: &str) {
-        fs::write(self.mkpath(id).join("input"), input)
+        fs::write(self.mkpath(id).join("in"), input)
             .unwrap_or_else(|_| warn!("failed to insert input"));
     }
 

@@ -32,13 +32,13 @@ cargo install libaoc
 Retrieve the puzzle's questions and answers for a certain day and year.
 
 ```sh
-aoc get -y 2024 -d 4
+aoc get -y 2024 -d 6
 ```
 
 Submit an answer for a specific puzzle and part.
 
 ```sh
-aoc submit -y 2024 -d 4 -p 2 "answer"
+aoc submit -y 2024 -d 6 -p 2 "answer"
 ```
 
 If the day or year is omitted, it will be derived from the current directory's
@@ -46,9 +46,7 @@ structure. If the puzzle's part is omitted, it will smartly be chosen from the
 puzzle state. Almost all commands can be shortened in this way.
 
 ```sh
-pwd
-/Users/j0rdi/aoc/2024/d04
-
+# /home/user/aoc/2024/d06
 aoc submit "answer"
 ```
 
@@ -102,7 +100,7 @@ let puzzle = client.get_puzzle(&id)?;
 let input = client.get_input(&id?);
 ```
 
-Directly download the puzzle, skip checking and saving to cache
+Download the puzzle, skip checking and saving to cache.
 
 ```rs
 let puzzle = client.scrape_puzzle(&(2024, 6))?;
@@ -126,4 +124,3 @@ check for the field `cookie` in the request headers of the current page. You
 can also right click on the request and copy the cURL command used.
 
 Remember that you `must be logged in` for your session cookie to be present in your request headers.
-
