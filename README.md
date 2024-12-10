@@ -90,42 +90,31 @@ cargo add libaoc
 
 ### Example
 
-Use the client to scrape a puzzle from the website. The [session token](#session-token) is
-required to verify the user.
+Use the client to get a puzzle from cache or by scraping the website.
 
 ```rs
 use libaoc::Client;
 
-let token = "53616c...";
-let client = Client::new(token)?;
-let puzzle = client.scrape_puzzle((2024, 4))?;
-```
+let client = Client::new()?;
 
-Get a puzzle from the cache or by scraping the website if the puzzle is not present.
-
-```rs
-let id = (2024, 4);
+let id = (2024, 6); // `(year, day)`
 let puzzle = client.get_puzzle(&id)?;
-prinln!("q1 {}", puzzle.q1);
-prinln!("a1 {}", puzzle.a1);
-
-let input = client.get_input(&id)?);
+let input = client.get_input(&id?);
 ```
 
-Submit an answer. When using the CLI the `id` and `part` can be automatically
-determined if omitted.
+Directly download the puzzle, skip checking and saving to cache
 
 ```rs
-let id = (2024, 4);
+let puzzle = client.scrape_puzzle(&(2024, 6))?;
+prinln!("Question: {}", puzzle.q1);
+prinln!("Answer: {}", puzzle.a1);
+```
+
+Submit an answer.
+
+```rs
 let part = 2;
-client.submit(&id, part, "answer")?;
-```
-
-Refresh the in cache puzzle by re-scraping the website. This is done after a
-successful submission of part one to retrieve part two automatically.
-
-```rs
-let puzzle = client.refresh_puzzle((2024, 4))?;
+client.submit(&(2024, 6), part, "answer")?;
 ```
 
 ## Session token
@@ -137,3 +126,4 @@ check for the field `cookie` in the request headers of the current page. You
 can also right click on the request and copy the cURL command used.
 
 Remember that you `must be logged in` for your session cookie to be present in your request headers.
+

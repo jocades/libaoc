@@ -100,7 +100,7 @@ impl Client {
     }
 
     /// Get the puzzle's input from cache or by requesting the server.
-    pub fn get_input(self, id: &PuzzleId) -> Result<String> {
+    pub fn get_input(&self, id: &PuzzleId) -> Result<String> {
         if let Some(input) = self.cache.get_input(id) {
             return Ok(input);
         }
