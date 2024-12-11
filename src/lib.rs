@@ -276,7 +276,7 @@ impl Puzzle {
             let _ = writeln!(&mut buf, "{q1}");
             if show_answers {
                 if let Some(a1) = &self.a1 {
-                    let _ = writeln!(&mut buf, "Answer: {a1}.");
+                    let _ = writeln!(&mut buf, "**Answer**: `{a1}`.");
                 }
             }
         }
@@ -284,7 +284,7 @@ impl Puzzle {
             let _ = writeln!(&mut buf, "\n{q2}");
             if show_answers {
                 if let Some(a2) = &self.a2 {
-                    let _ = writeln!(&mut buf, "Answer: {a2}.");
+                    let _ = writeln!(&mut buf, "**Answer**: `{a2}`.");
                 }
             }
         }
