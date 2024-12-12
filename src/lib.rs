@@ -134,7 +134,7 @@ impl Client {
             .http
             .post(format!("{}/answer", self.mkurl(id)))
             .header("content-type", "application/x-www-form-urlencoded")
-            .body(format!("level={part}&answer={}", answer.as_ref()))
+            .body(format!("level={}&answer={}", part, answer.as_ref()))
             .send()?
             .error_for_status()?
             .text()?;
