@@ -7,17 +7,16 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use reqwest::header::HeaderMap;
-use reqwest::redirect::Policy;
+use reqwest::{header::HeaderMap, redirect::Policy};
 use scraper::{Html, Selector};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 pub const AOC_URL: &str = "https://adventofcode.com";
 pub const AUTH_VAR: &str = "AOC_AUTH_TOKEN";
 pub const CACHE_PATH: &str = ".cache/aoc";
 
 /// A `(year, day)` pair to identify a puzzle.
-pub type PuzzleId = (u32, u32);
+pub type PuzzleId = (u16, u8);
 
 /// The `Advent of Code` client handles puzzle retrieval and cache.
 pub struct Client {
@@ -116,7 +115,7 @@ impl Client {
     pub fn submit(
         &self,
         id: &PuzzleId,
-        part: Option<u32>,
+        part: Option<u8>,
         answer: impl AsRef<str>,
     ) -> Result<Option<Puzzle>> {
         // TODO: Check for answers in cache to be able to submit once the puzzle
@@ -176,7 +175,7 @@ pub enum Submit {
     Error,
 }
 
-/// A file system cache to store downloaded puzzles.
+/// File system cache to store downloaded puzzles.
 struct Cache {
     path: PathBuf,
 }
@@ -338,18 +337,39 @@ pub fn puzzle_id_from_path(path: impl AsRef<Path>) -> Option<PuzzleId> {
     None
 }
 
-struct Id(u32, u32);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl TryFrom<&Path> for Id {
-    type Error = &'static str;
+    #[test]
+    fn from_path() {
+        let cases = vec![
+            ("/Users/j0rdi/aoc/2015/d01", Some((2015, 1))),
+            ("/home/j0rdi/aoc/2024/25", Some((2024, 25))),
+            ("/Users/j0rdi/aoc/2017/other/d8", Some((2017, 8))),
+            ("/home/j0rdi/aoc/2017/other/08/sub", Some((2017, 8))),
+        ];
 
-    fn try_from(path: &Path) -> Result<Self, Self::Error> {
-        match puzzle_id_from_path(path) {
-            Some((y, d)) => Ok(Id(y, d)),
-            None => Err("could not determine puzzle id from path"),
+        for (path, expected) in cases {
+            assert_eq!(puzzle_id_from_path(path), expected)
         }
+
+        assert_eq!(puzzle_id_from_path("/invalid/path"), None)
     }
 }
+
+// struct Id(u32, u32);
+//
+// impl TryFrom<&Path> for Id {
+//     type Error = &'static str;
+//
+//     fn try_from(path: &Path) -> Result<Self, Self::Error> {
+//         match puzzle_id_from_path(path) {
+//             Some((y, d)) => Ok(Id(y, d)),
+//             None => Err("could not determine puzzle id from path"),
+//         }
+//     }
+// }
 
 /* impl<P: AsRef<Path>> From<P> for Id {
     fn from(value: P) -> Self {
@@ -357,40 +377,8 @@ impl TryFrom<&Path> for Id {
     }
 } */
 
-impl From<(u32, u32)> for Id {
-    fn from((y, d): (u32, u32)) -> Self {
-        Id(y, d)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn take_id(id: &Id) {}
-
-    fn give_id() {
-        take_id(&(1, 2).into());
-        let id: Id = Path::new("/home/2015/d03").try_into().unwrap();
-    }
-
-    #[test]
-    fn from_path() {
-        assert_eq!(
-            puzzle_id_from_path("/Users/j0rdi/aoc/2015/d01"),
-            Some((2015, 1))
-        );
-        assert_eq!(
-            puzzle_id_from_path("/home/j0rdi/aoc/2024/25"),
-            Some((2024, 25))
-        );
-        assert_eq!(
-            puzzle_id_from_path("/Users/j0rdi/aoc/2017/other/d8"),
-            Some((2017, 8))
-        );
-        assert_eq!(
-            puzzle_id_from_path("/home/j0rdi/aoc/2017/other/08/sub"),
-            Some((2017, 8))
-        );
-    }
-}
+// impl From<(u32, u32)> for Id {
+//     fn from((y, d): (u32, u32)) -> Self {
+//         Id(y, d)
+//     }
+// }

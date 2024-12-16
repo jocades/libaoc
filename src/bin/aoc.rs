@@ -17,10 +17,10 @@ struct Args {
 
 #[derive(clap::Args)]
 struct YearDay {
-    #[arg(long, short, value_parser = value_parser!(u32).range(2015..=2024))]
-    year: Option<u32>,
-    #[arg(long, short, value_parser = value_parser!(u32).range(1..=24))]
-    day: Option<u32>,
+    #[arg(long, short, value_parser = value_parser!(u16).range(2015..=2024))]
+    year: Option<u16>,
+    #[arg(long, short, value_parser = value_parser!(u8).range(1..=24))]
+    day: Option<u8>,
 }
 
 #[derive(Subcommand)]
@@ -37,8 +37,8 @@ enum Command {
     Submit {
         #[command(flatten)]
         yd: YearDay,
-        #[arg(long, short, value_parser = value_parser!(u32).range(1..=2))]
-        part: Option<u32>,
+        #[arg(long, short, value_parser = value_parser!(u8).range(1..=2))]
+        part: Option<u8>,
         answer: String,
     },
     View {
@@ -55,7 +55,7 @@ fn main() -> Result<()> {
     setup_logging(args.verbose)?;
 
     let client = Client::new()?;
-    let dest = destination();
+    let cwd = env::current_dir()?;
 
     match args.command {
         Command::Get { yd, output, build } => {
@@ -81,7 +81,7 @@ fn main() -> Result<()> {
         Command::Submit { answer, yd, part } => {
             let id = puzzle_id(yd.year, yd.day)?;
             if let Some(puzzle) = client.submit(&id, part, &answer)? {
-                puzzle.write_view(dest.join("puzzle.md"))?;
+                puzzle.write_view(cwd.join("puzzle.md"))?;
             }
         }
 
@@ -102,9 +102,11 @@ fn destination() -> PathBuf {
         .unwrap_or(env::current_dir().unwrap())
 }
 
-fn puzzle_id(year: Option<u32>, day: Option<u32>) -> Result<PuzzleId> {
+fn puzzle_id(year: Option<u16>, day: Option<u8>) -> Result<PuzzleId> {
     validate_puzzle_id(match (year, day) {
         (Some(y), Some(d)) => (y, d),
+        // (Some(y), None) => {}
+        // (None, Some(d)) => {}
         _ => find_current_puzzle_id().unwrap_or_else(|| {
             error!("Could not determine puzzle from current directory");
             process::exit(1);
@@ -128,7 +130,7 @@ fn setup_logging(verbose: bool) -> Result<()> {
 
     let filter = EnvFilter::builder()
         .with_default_directive(if verbose {
-            LevelFilter::INFO.into()
+            LevelFilter::DEBUG.into()
         } else {
             LevelFilter::ERROR.into()
         })
@@ -138,6 +140,7 @@ fn setup_logging(verbose: bool) -> Result<()> {
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
+        .without_time()
         .compact()
         .init();
 

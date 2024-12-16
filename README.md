@@ -97,15 +97,15 @@ let client = Client::new()?;
 
 let id = (2024, 6); // `(year, day)`
 let puzzle = client.get_puzzle(&id)?;
-let input = client.get_input(&id?);
+let input = client.get_input(&id)?;
 ```
 
 Download the puzzle, skip checking and saving to cache.
 
 ```rs
 let puzzle = client.scrape_puzzle(&(2024, 6))?;
-prinln!("Question: {}", puzzle.q1);
-prinln!("Answer: {}", puzzle.a1);
+println!("Question: {}", puzzle.q1);
+println!("Answer: {}", puzzle.a1);
 ```
 
 Submit an answer.
