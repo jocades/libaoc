@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{ensure, Result};
 use clap::{value_parser, Parser, Subcommand};
-use tracing::error;
+use tracing::{error, info};
 
 use libaoc::{Client, PuzzleId};
 
@@ -68,19 +68,14 @@ fn main() -> Result<()> {
             let id = derive_id(id, &cwd)?;
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
-            let dest = if build {
-                let mut path = format!("{}/d", id.0);
-                if id.1 < 10 {
-                    path.push('0');
-                }
-                path.push_str(&id.1.to_string());
-                path.into()
-            } else {
-                output.unwrap_or(cwd)
-            };
+            let dest = build_path(&id, build).unwrap_or_else(|| output.unwrap_or(cwd));
             fs::create_dir_all(&dest)?;
-            fs::write(dest.join("puzzle.md"), puzzle.view(true))?;
-            fs::write(dest.join("input"), &input)?;
+            let puzzle_path = dest.join("puzzle.md");
+            fs::write(&puzzle_path, puzzle.view(true))?;
+            info!("{} written", puzzle_path.display());
+            let input_path = dest.join("input");
+            fs::write(&input_path, &input)?;
+            info!("{} written", input_path.display());
         }
         Command::Submit { id, part, answer } => {
             let id = derive_id(id, &cwd)?;
@@ -112,6 +107,17 @@ fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
     ensure!((2015..=2024).contains(&year), "Invalid year: {year}");
     ensure!((1..=25).contains(&day), "Invalid day: {day}");
     Ok((year, day))
+}
+
+fn build_path((y, d): &PuzzleId, build: bool) -> Option<PathBuf> {
+    build.then(|| {
+        let mut path = format!("{}/d", y);
+        if *d < 10 {
+            path.push('0');
+        }
+        path.push_str(&d.to_string());
+        path.into()
+    })
 }
 
 fn setup_logging(verbose: bool) -> Result<()> {
