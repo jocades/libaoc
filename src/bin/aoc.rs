@@ -1,4 +1,8 @@
-use std::{env, fs, path::PathBuf, process};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process,
+};
 
 use anyhow::{ensure, Result};
 use clap::{value_parser, Parser, Subcommand};
@@ -17,8 +21,10 @@ struct Args {
 
 #[derive(clap::Args)]
 struct YearDay {
+    /// The puzzle's year
     #[arg(long, short, value_parser = value_parser!(u16).range(2015..=2024))]
     year: Option<u16>,
+    /// The puzzle's day
     #[arg(long, short, value_parser = value_parser!(u8).range(1..=25))]
     day: Option<u8>,
 }
@@ -27,7 +33,7 @@ struct YearDay {
 enum Command {
     Get {
         #[command(flatten)]
-        yd: YearDay,
+        id: YearDay,
         /// The output directory, default: `.`
         output: Option<PathBuf>,
         /// Build the directories `./year/day/`
@@ -36,14 +42,14 @@ enum Command {
     },
     Submit {
         #[command(flatten)]
-        yd: YearDay,
+        id: YearDay,
         #[arg(long, short, value_parser = value_parser!(u8).range(1..=2))]
         part: Option<u8>,
         answer: String,
     },
     View {
         #[command(flatten)]
-        yd: YearDay,
+        id: YearDay,
         /// Wether to show the answers for each part.
         #[arg(long, short)]
         answers: bool,
@@ -58,18 +64,17 @@ fn main() -> Result<()> {
     let cwd = env::current_dir()?;
 
     match args.command {
-        Command::Get { yd, output, build } => {
-            let id = puzzle_id(yd.year, yd.day)?;
+        Command::Get { id, output, build } => {
+            let id = derive_id(id, &cwd)?;
             let puzzle = client.get_puzzle(&id)?;
             let input = client.get_input(&id)?;
-
             let dest = if build {
                 let mut path = format!("{}/d", id.0);
                 if id.1 < 10 {
                     path.push('0');
                 }
                 path.push_str(&id.1.to_string());
-                PathBuf::from(path)
+                path.into()
             } else {
                 output.unwrap_or(cwd)
             };
@@ -77,16 +82,14 @@ fn main() -> Result<()> {
             fs::write(dest.join("puzzle.md"), puzzle.view(true))?;
             fs::write(dest.join("input"), &input)?;
         }
-
-        Command::Submit { answer, yd, part } => {
-            let id = puzzle_id(yd.year, yd.day)?;
+        Command::Submit { id, part, answer } => {
+            let id = derive_id(id, &cwd)?;
             if let Some(puzzle) = client.submit(&id, part, &answer)? {
                 puzzle.write_view(cwd.join("puzzle.md"))?;
             }
         }
-
-        Command::View { yd, answers } => {
-            let id = puzzle_id(yd.year, yd.day)?;
+        Command::View { id, answers } => {
+            let id = derive_id(id, &cwd)?;
             let puzzle = client.get_puzzle(&id)?;
             println!("{}", puzzle.view(answers));
         }
@@ -95,12 +98,10 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn puzzle_id(year: Option<u16>, day: Option<u8>) -> Result<PuzzleId> {
-    validate_puzzle_id(match (year, day) {
+fn derive_id(id: YearDay, cwd: impl AsRef<Path>) -> Result<PuzzleId> {
+    validate_puzzle_id(match (id.year, id.day) {
         (Some(y), Some(d)) => (y, d),
-        // (Some(y), None) => {}
-        // (None, Some(d)) => {}
-        _ => find_current_puzzle_id().unwrap_or_else(|| {
+        _ => libaoc::puzzle_id_from_path(cwd).unwrap_or_else(|| {
             error!("Could not determine puzzle from current directory");
             process::exit(1);
         }),
@@ -111,10 +112,6 @@ fn validate_puzzle_id((year, day): PuzzleId) -> Result<PuzzleId> {
     ensure!((2015..=2024).contains(&year), "Invalid year: {year}");
     ensure!((1..=25).contains(&day), "Invalid day: {day}");
     Ok((year, day))
-}
-
-fn find_current_puzzle_id() -> Option<PuzzleId> {
-    libaoc::puzzle_id_from_path(env::current_dir().unwrap())
 }
 
 fn setup_logging(verbose: bool) -> Result<()> {
