@@ -19,7 +19,7 @@ struct Args {
 struct YearDay {
     #[arg(long, short, value_parser = value_parser!(u16).range(2015..=2024))]
     year: Option<u16>,
-    #[arg(long, short, value_parser = value_parser!(u8).range(1..=24))]
+    #[arg(long, short, value_parser = value_parser!(u8).range(1..=25))]
     day: Option<u8>,
 }
 
@@ -71,7 +71,7 @@ fn main() -> Result<()> {
                 path.push_str(&id.1.to_string());
                 PathBuf::from(path)
             } else {
-                output.unwrap_or("./".into())
+                output.unwrap_or(cwd)
             };
             fs::create_dir_all(&dest)?;
             fs::write(dest.join("puzzle.md"), puzzle.view(true))?;
@@ -93,13 +93,6 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn destination() -> PathBuf {
-    env::var("__NVIM_AOC")
-        .ok()
-        .map(PathBuf::from)
-        .unwrap_or(env::current_dir().unwrap())
 }
 
 fn puzzle_id(year: Option<u16>, day: Option<u8>) -> Result<PuzzleId> {
