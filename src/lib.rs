@@ -341,6 +341,29 @@ pub fn puzzle_id_from_path(path: impl AsRef<Path>) -> Option<PuzzleId> {
 mod tests {
     use super::*;
 
+    fn derive_id_from_path(path: impl AsRef<Path>) -> Result<(Option<u16>, Option<u8>)> {
+        for parent in path.as_ref().ancestors() {
+            let mut buf = String::new();
+            let mut chars = parent
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .chars()
+                .peekable();
+
+            while let Some(c) = chars.next() {
+                if c.is_ascii_digit() {
+                    buf.push(c);
+                    if !chars.peek().is_some_and(|c| c.is_ascii_digit()) {
+                        break;
+                    }
+                }
+            }
+        }
+        todo!()
+    }
+
     #[test]
     fn from_path() {
         let cases = vec![

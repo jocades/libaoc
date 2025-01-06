@@ -128,7 +128,7 @@ fn setup_logging(verbose: bool) -> Result<()> {
         .with_default_directive(if verbose {
             LevelFilter::DEBUG.into()
         } else {
-            LevelFilter::ERROR.into()
+            LevelFilter::INFO.into()
         })
         .from_env()?
         .add_directive("hyper::proto=info".parse()?)
@@ -137,6 +137,7 @@ fn setup_logging(verbose: bool) -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .without_time()
+        .with_target(false)
         .compact()
         .init();
 
